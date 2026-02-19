@@ -1,46 +1,41 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <title>WebGIS - Struktur Repository</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css"/>
-<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-
 <style>
-body {
-    margin: 0;
-    display: flex;
-    font-family: Arial, sans-serif;
+body { margin:0; display:flex; font-family:Arial; }
+
+#sidebar{
+    width:300px;
+    background:#f4f4f4;
+    padding:10px;
+    overflow:auto;
+    border-right:1px solid #ccc;
 }
 
-#sidebar {
-    width: 280px;
-    background: #f4f4f4;
-    padding: 10px;
-    overflow-y: auto;
-    border-right: 1px solid #ccc;
+#map{ flex:1; height:100vh; }
+
+.folder{
+    cursor:pointer;
+    font-weight:bold;
+    margin-top:5px;
 }
 
-#map {
-    flex: 1;
-    height: 100vh;
+.subfolder{
+    margin-left:15px;
 }
 
-.folder-title {
-    font-weight: bold;
-    margin-top: 10px;
+.year{
+    margin-left:35px;
 }
 
-.subfolder {
-    margin-left: 15px;
-}
-
-.year {
-    margin-left: 30px;
+.hidden{
+    display:none;
 }
 </style>
 </head>
@@ -49,7 +44,7 @@ body {
 
 <div id="sidebar">
     <h3>Struktur Data</h3>
-    <div id="folderList">Loading...</div>
+    <div id="folderTree">Loading...</div>
 </div>
 
 <div id="map"></div>
@@ -57,167 +52,122 @@ body {
 <script>
 
 // ===============================
-// 1. BATAS INDONESIA
+// 1️⃣ BATAS INDONESIA
 // ===============================
 var indonesiaBounds = [
     [-11.5, 94.5],
     [6.5, 141.5]
 ];
 
-var map = L.map("map", {
+var map = L.map("map",{
     maxBounds: indonesiaBounds,
-    maxBoundsViscosity: 1.0,
-    minZoom: 5,
-    maxZoom: 18
+    maxBoundsViscosity:1.0,
+    minZoom:5,
+    maxZoom:18
 }).fitBounds(indonesiaBounds);
 
 // ===============================
-// 2. BASEMAP
+// 2️⃣ BASEMAP
 // ===============================
-var osm = L.tileLayer(
+L.tileLayer(
     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    { attribution: "© OpenStreetMap" }
+    { attribution:"© OpenStreetMap" }
 ).addTo(map);
 
-var satellite = L.tileLayer(
-    "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
-    { attribution: "Satellite" }
-);
-
-L.control.layers({
-    "OpenStreetMap": osm,
-    "Satellite": satellite
-}).addTo(map);
-
 // ===============================
-// 3. SEARCH
+// 3️⃣ LOAD STRUKTUR REPOSITORY
 // ===============================
-L.Control.geocoder().addTo(map);
 
-// ===============================
-// 4. LOAD STRUKTUR REPOSITORY
-// ===============================
-var baseAPI = "https://api.github.com/repos/GeoSpatialNusantara/WebGis/contents/file";
-var activeLayers = {};
-var container = document.getElementById("folderList");
+const owner = "GeoSpatialNusantara";
+const repo = "WebGis";
+const branch = "main";
+const basePath = "file";
 
-fetch(baseAPI)
-.then(res => res.json())
-.then(function(mainFolders) {
+const apiURL = `https://api.github.com/repos/${owner}/${repo}/contents/${basePath}?ref=${branch}`;
 
-    container.innerHTML = "";
+let activeLayers = {};
 
-    mainFolders.forEach(function(main) {
+function createFolder(name){
+    let div = document.createElement("div");
+    div.className = "folder";
+    div.innerHTML = "📁 " + name;
+    return div;
+}
 
-        if (main.type === "dir") {
+function createCheckbox(name, fileURL){
+    let div = document.createElement("div");
+    div.className = "year";
 
-            // Folder Utama (file)
-            var title = document.createElement("div");
-            title.className = "folder-title";
-            title.textContent = main.name;
-            container.appendChild(title);
+    let checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
 
-            fetch(main.url)
-            .then(res => res.json())
-            .then(function(subfolders) {
+    checkbox.onchange = function(){
 
-                subfolders.forEach(function(sub) {
+        if(this.checked){
 
-                    if (sub.type === "dir") {
-
-                        // Subfolder (contoh: Batimetri MBES)
-                        var subDiv = document.createElement("div");
-                        subDiv.className = "subfolder";
-                        subDiv.textContent = "📁 " + sub.name;
-                        container.appendChild(subDiv);
-
-                        fetch(sub.url)
-                        .then(res => res.json())
-                        .then(function(yearFolders) {
-
-                            yearFolders.forEach(function(year) {
-
-                                if (year.type === "dir") {
-
-                                    var yearDiv = document.createElement("div");
-                                    yearDiv.className = "year";
-
-                                    var checkbox = document.createElement("input");
-                                    checkbox.type = "checkbox";
-
-                                    checkbox.addEventListener("change", function() {
-
-                                        if (this.checked) {
-
-                                            fetch(year.url)
-                                            .then(res => res.json())
-                                            .then(function(files) {
-
-                                                files.forEach(function(file) {
-
-                                                    if (file.name.endsWith(".geojson")) {
-
-                                                        fetch(file.download_url)
-                                                        .then(res => res.json())
-                                                        .then(function(data) {
-
-                                                            var layer = L.geoJSON(data).addTo(map);
-
-                                                            if (!activeLayers[year.path]) {
-                                                                activeLayers[year.path] = [];
-                                                            }
-
-                                                            activeLayers[year.path].push(layer);
-
-                                                            map.fitBounds(layer.getBounds());
-
-                                                        });
-
-                                                    }
-
-                                                });
-
-                                            });
-
-                                        } else {
-
-                                            if (activeLayers[year.path]) {
-                                                activeLayers[year.path].forEach(function(layer) {
-                                                    map.removeLayer(layer);
-                                                });
-                                                delete activeLayers[year.path];
-                                            }
-
-                                        }
-
-                                    });
-
-                                    yearDiv.appendChild(checkbox);
-                                    yearDiv.appendChild(
-                                        document.createTextNode(" " + year.name)
-                                    );
-
-                                    container.appendChild(yearDiv);
-
-                                }
-
-                            });
-
-                        });
-
-                    }
-
-                });
-
+            fetch(fileURL)
+            .then(r=>r.json())
+            .then(data=>{
+                let geo = L.geoJSON(data).addTo(map);
+                activeLayers[name] = geo;
             });
 
+        }else{
+
+            if(activeLayers[name]){
+                map.removeLayer(activeLayers[name]);
+                delete activeLayers[name];
+            }
+
+        }
+    };
+
+    div.appendChild(checkbox);
+    div.appendChild(document.createTextNode(" " + name));
+
+    return div;
+}
+
+async function loadFolder(path, container){
+
+    const response = await fetch(path);
+    const items = await response.json();
+
+    items.forEach(item=>{
+
+        if(item.type === "dir"){
+
+            let folderDiv = createFolder(item.name);
+            container.appendChild(folderDiv);
+
+            let subContainer = document.createElement("div");
+            subContainer.className = "subfolder hidden";
+            container.appendChild(subContainer);
+
+            folderDiv.onclick = function(){
+                subContainer.classList.toggle("hidden");
+            };
+
+            loadFolder(item.url, subContainer);
+
+        }
+
+        if(item.type === "file" && item.name.endsWith(".geojson")){
+
+            let rawURL = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${basePath}/${item.name}`;
+
+            let checkboxDiv = createCheckbox(item.name, rawURL);
+            container.appendChild(checkboxDiv);
         }
 
     });
 
-})
-.catch(function(error) {
-    container.innerHTML = "Struktur folder tidak ditemukan.";
+}
+
+loadFolder(apiURL, document.getElementById("folderTree"))
+.catch(()=>{
+    document.getElementById("folderTree").innerHTML =
+    "Struktur folder tidak ditemukan.";
 });
 
 </script>
