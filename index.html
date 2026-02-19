@@ -57,47 +57,16 @@ body {
 <script>
 
 // ===============================
-// 1. BATAS INDONESIA
+// 4. LOAD STRUKTUR FOLDER → SUBFOLDER → TAHUN
 // ===============================
-var indonesiaBounds = [
-    [-11.5, 94.5],
-    [6.5, 141.5]
-];
 
-var map = L.map("map", {
-    maxBounds: indonesiaBounds,
-    maxBoundsViscosity: 1.0,
-    minZoom: 5,
-    maxZoom: 18
-}).fitBounds(indonesiaBounds);
-
-// ===============================
-// 2. BASEMAP
-// ===============================
-var osm = L.tileLayer(
-    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    { attribution: "© OpenStreetMap" }
-).addTo(map);
-
-L.control.layers({
-    "OpenStreetMap": osm
-}).addTo(map);
-
-// ===============================
-// 3. SEARCH
-// ===============================
-L.Control.geocoder().addTo(map);
-
-// ===============================
-// 4. LOAD FOLDER + SUBFOLDER + TAHUN
-// ===============================
 var folderAPI = "https://api.github.com/repos/GeoSpatialNusantara/WebGis/contents/file";
 var activeLayers = {};
 var container = document.getElementById("folderList");
 
 fetch(folderAPI)
-.then(response => response.json())
-.then(folders => {
+.then(res => res.json())
+.then(function(folders) {
 
     container.innerHTML = "";
 
@@ -105,34 +74,37 @@ fetch(folderAPI)
 
         if (folder.type === "dir") {
 
+            // ===== FOLDER UTAMA =====
             var folderTitle = document.createElement("div");
-            folderTitle.className = "folder-title";
+            folderTitle.style.fontWeight = "bold";
+            folderTitle.style.marginTop = "10px";
             folderTitle.textContent = folder.name;
             container.appendChild(folderTitle);
 
             fetch(folder.url)
             .then(res => res.json())
-            .then(subfolders => {
+            .then(function(subfolders) {
 
                 subfolders.forEach(function(sub) {
 
                     if (sub.type === "dir") {
 
+                        // ===== SUBFOLDER =====
                         var subDiv = document.createElement("div");
-                        subDiv.className = "subfolder";
+                        subDiv.style.marginLeft = "15px";
                         subDiv.textContent = "📁 " + sub.name;
                         container.appendChild(subDiv);
 
                         fetch(sub.url)
                         .then(res => res.json())
-                        .then(yearFolders => {
+                        .then(function(yearFolders) {
 
                             yearFolders.forEach(function(year) {
 
                                 if (year.type === "dir") {
 
                                     var yearDiv = document.createElement("div");
-                                    yearDiv.className = "year";
+                                    yearDiv.style.marginLeft = "30px";
 
                                     var checkbox = document.createElement("input");
                                     checkbox.type = "checkbox";
@@ -143,7 +115,7 @@ fetch(folderAPI)
 
                                             fetch(year.url)
                                             .then(res => res.json())
-                                            .then(files => {
+                                            .then(function(files) {
 
                                                 files.forEach(function(file) {
 
@@ -151,9 +123,19 @@ fetch(folderAPI)
 
                                                         fetch(file.download_url)
                                                         .then(res => res.json())
-                                                        .then(data => {
+                                                        .then(function(data) {
 
-                                                            var layer = L.geoJSON(data).addTo(map);
+                                                            var layer = L.geoJSON(data, {
+                                                                onEachFeature: function(feature, layer) {
+                                                                    if (feature.properties) {
+                                                                        var popup = "";
+                                                                        for (var key in feature.properties) {
+                                                                            popup += key + ": " + feature.properties[key] + "<br>";
+                                                                        }
+                                                                        layer.bindPopup(popup);
+                                                                    }
+                                                                }
+                                                            }).addTo(map);
 
                                                             if (!activeLayers[year.path]) {
                                                                 activeLayers[year.path] = [];
