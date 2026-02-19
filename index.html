@@ -89,12 +89,12 @@ html, body { margin:0; height:100%; font-family:sans-serif; }
 <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 
 <script>
-// ================= MAP =================
+/* ================= MAP ================= */
 var map = L.map('map', {
-    zoomControl:false, // zoom button dihapus
+    zoomControl:false
 }).setView([-2.5,118],5);
 
-// Basemap
+/* ================= BASEMAP ================= */
 var osm = L.tileLayer(
     'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
 );
@@ -107,9 +107,38 @@ var googleSat = L.tileLayer(
     }
 );
 
-osm.addTo(map);
+var currentBasemap = osm.addTo(map);
 
-// ================= SIDEBAR =================
+/* ================= BASEMAP SWITCH ================= */
+document.querySelectorAll('input[name="basemap"]').forEach(radio=>{
+    radio.addEventListener('change',function(){
+        map.removeLayer(currentBasemap);
+        currentBasemap = this.value==="osm" ? osm : googleSat;
+        currentBasemap.addTo(map);
+    });
+});
+
+/* ================= SEARCH DROPDOWN ================= */
+var geocoder = L.Control.Geocoder.nominatim();
+var searchInput = document.getElementById("searchInput");
+
+searchInput.addEventListener("input", function(){
+    let query = this.value;
+    if(query.length < 3) return;
+
+    geocoder.geocode(query, function(results){
+        if(results.length > 0){
+            let result = results[0];
+            map.setView(result.center, 13, {animate:true});
+        }
+    });
+});
+
+document.getElementById("clearBtn").onclick=function(){
+    searchInput.value="";
+};
+
+/* ================= SIDEBAR ================= */
 var sidebar = document.getElementById("sidebar");
 var toggleBtn = document.getElementById("toggleBtn");
 
@@ -123,81 +152,63 @@ map.on("click", function(){
     toggleBtn.style.display="block";
 });
 
-// ================= BASEMAP SWITCH =================
-document.querySelectorAll('input[name="basemap"]').forEach(radio=>{
-    radio.addEventListener('change',function(){
-        map.eachLayer(function(layer){
-            map.removeLayer(layer);
-        });
-        if(this.value==="osm"){
-            osm.addTo(map);
-        } else {
-            googleSat.addTo(map);
-        }
-    });
-});
+/* ================= AUTO LOAD GEOJSON ================= */
+var repo = "GeoSpatialNusantara/WebGis";
+var layerControl = {};
+var layerContainer = document.getElementById("layerList");
 
-// ================= SEARCH WITH SUGGESTION =================
-var geocoder = L.Control.Geocoder.nominatim();
-
-document.getElementById("searchInput").addEventListener("input", function(){
-    var query = this.value;
-    if(query.length > 3){
-        geocoder.geocode(query, function(results){
-            if(results.length > 0){
-                map.setView(results[0].center, 12, {animate:true});
+function loadFolder(url){
+    fetch(url)
+    .then(res=>res.json())
+    .then(data=>{
+        data.forEach(item=>{
+            if(item.type==="dir"){
+                loadFolder(item.url); // recursive
+            }
+            if(item.name.endsWith(".geojson")){
+                createLayer(item);
             }
         });
-    }
-});
+    });
+}
 
-document.getElementById("clearBtn").onclick=function(){
-    document.getElementById("searchInput").value="";
-};
+function createLayer(file){
+    var label = document.createElement("label");
+    label.style.display="block";
 
-// ================= AUTO LOAD LAYER DARI GITHUB =================
-var repo = "GeoSpatialNusantara/WebGis";
+    var checkbox = document.createElement("input");
+    checkbox.type="checkbox";
 
-fetch(`https://api.github.com/repos/${repo}/contents/`)
-.then(res=>res.json())
-.then(data=>{
-    data.forEach(folder=>{
-        if(folder.type==="dir"){
-            fetch(folder.url)
+    label.appendChild(checkbox);
+    label.append(" "+file.name);
+
+    var geoLayer;
+
+    checkbox.addEventListener("change",function(){
+        if(this.checked){
+            fetch(file.download_url)
             .then(res=>res.json())
-            .then(files=>{
-                files.forEach(file=>{
-                    if(file.name.endsWith(".geojson")){
-                        var checkbox=document.createElement("input");
-                        checkbox.type="checkbox";
-
-                        var label=document.createElement("label");
-                        label.style.display="block";
-                        label.appendChild(checkbox);
-                        label.append(" "+file.name);
-
-                        var geoLayer;
-
-                        checkbox.addEventListener("change",function(){
-                            if(this.checked){
-                                fetch(file.download_url)
-                                .then(res=>res.json())
-                                .then(geo=>{
-                                    geoLayer=L.geoJSON(geo).addTo(map);
-                                });
-                            } else {
-                                map.removeLayer(geoLayer);
-                            }
-                        });
-
-                        document.getElementById("layerList").appendChild(label);
+            .then(data=>{
+                geoLayer = L.geoJSON(data,{
+                    style:{
+                        color:"#00ffff",
+                        weight:2
                     }
-                });
+                }).addTo(map);
+
+                map.fitBounds(geoLayer.getBounds());
             });
+        } else {
+            map.removeLayer(geoLayer);
         }
     });
-});
+
+    layerContainer.appendChild(label);
+}
+
+loadFolder(`https://api.github.com/repos/${repo}/contents/`);
 </script>
+
 
 </body>
 </html>
