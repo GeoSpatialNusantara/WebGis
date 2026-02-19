@@ -1,247 +1,95 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
-<title>WebGIS Repository Viewer</title>
+    <meta charset="utf-8">
+    <title>WebGIS Interaktif</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/shpjs@latest/dist/shp.min.js"></script>
-<script src="https://unpkg.com/leaflet-kmz@latest/dist/leaflet-kmz.js"></script>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <style>
+        #map { height: 90vh; width: 100%; }
+        .checkbox-list { padding: 10px;}
+    </style>
 
-<style>
-body { margin:0; font-family:Arial; }
-
-#map {
-    height:100vh;
-}
-
-#sidebar {
-    position:absolute;
-    left:0;
-    top:0;
-    width:320px;
-    height:100%;
-    background:white;
-    overflow:auto;
-    transition:0.3s;
-    z-index:1000;
-    padding:10px;
-}
-
-#sidebar.hide {
-    left:-300px;
-}
-
-#toggleSidebar {
-    position:absolute;
-    top:10px;
-    left:330px;
-    z-index:1100;
-    background:white;
-    padding:6px 10px;
-    cursor:pointer;
-    border-radius:4px;
-    font-weight:bold;
-}
-
-.searchBox {
-    width:100%;
-    padding:6px;
-    margin-bottom:10px;
-}
-</style>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Leaflet Search Plugin (untuk pencarian lokasi) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 </head>
-
 <body>
 
-<div id="sidebar">
-    <h3>🗂 Layer Repository</h3>
-    <input type="text" id="searchInput" class="searchBox" placeholder="Search layer...">
-    <div id="layerList"></div>
+<div class="checkbox-list">
+    <!-- Checkbox untuk layer data -->
+    <label><input type="checkbox" id="cb_roads"> Roads</label>
+    <label><input type="checkbox" id="cb_points"> Points</label>
+    <label><input type="checkbox" id="cb_polygons"> Polygons</label>
 </div>
 
-<div id="toggleSidebar">☰</div>
 <div id="map"></div>
 
 <script>
+// 1. Inisialisasi Map
+var map = L.map('map').setView([-6.9, 107.6], 11);
 
-// ===============================
-// BATAS INDONESIA
-// ===============================
-const indonesiaBounds = [
-    [-11.5, 94],
-    [6.5, 141]
-];
+// 2. Dua Basemap
+var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
 
-var map = L.map('map', {
-    maxBounds: indonesiaBounds,
-    minZoom:5,
-    maxZoom:18
-}).setView([-2.5,118],5);
-
-// ===============================
-// BASEMAP
-// ===============================
-var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-
-var googleSat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{
-    subdomains:['mt0','mt1','mt2','mt3']
+var satellite = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{
+    attribution: '&copy; Satellite layer'
 });
 
-osm.addTo(map);
-
+// 3. Kontrol basemap
 var baseMaps = {
     "OpenStreetMap": osm,
-    "Google Satellite": googleSat
+    "Satellite": satellite
 };
+L.control.layers(baseMaps).addTo(map);
 
-L.control.layers(baseMaps,null,{position:'topright'}).addTo(map);
+// 4. Layer kosong untuk file-file data
+var layerRoads = L.layerGroup().addTo(map);
+var layerPoints = L.layerGroup().addTo(map);
+var layerPolygons = L.layerGroup().addTo(map);
 
-// ===============================
-// SIDEBAR TOGGLE
-// ===============================
-document.getElementById("toggleSidebar").onclick = function(){
-    document.getElementById("sidebar").classList.toggle("hide");
-};
-
-// ===============================
-// GITHUB CONFIG
-// ===============================
-const user = "USERNAME";
-const repo = "REPO";
-const rootFolder = "FOLDER";
-
-const apiURL = `https://api.github.com/repos/${user}/${repo}/contents/${rootFolder}`;
-
-let allLayers = {};
-let loadedLayers = {};
-
-function createRadio(name, value, labelText, callback){
-    const label = document.createElement("label");
-    label.style.display="block";
-
-    const input = document.createElement("input");
-    input.type="checkbox";
-    input.value=value;
-    input.onchange=callback;
-
-    label.appendChild(input);
-    label.append(" "+labelText);
-
-    return label;
+// 5. Load data GeoJSON
+function loadGeoJSON(url, layerGroup){
+    fetch(url)
+    .then(res => res.json())
+    .then(data => L.geoJSON(data).addTo(layerGroup));
 }
 
-function loadRepo(){
-
-fetch(apiURL)
-.then(res=>res.json())
-.then(categories=>{
-
-categories.forEach(cat=>{
-if(cat.type==="dir"){
-
-    const catDiv=document.createElement("div");
-    catDiv.innerHTML="<b>"+cat.name+"</b>";
-    document.getElementById("layerList").appendChild(catDiv);
-
-    fetch(cat.url)
-    .then(res=>res.json())
-    .then(years=>{
-
-        years.forEach(year=>{
-        if(year.type==="dir"){
-
-            const yearDiv=document.createElement("div");
-            yearDiv.style.marginLeft="15px";
-            yearDiv.innerHTML="<i>"+year.name+"</i>";
-            document.getElementById("layerList").appendChild(yearDiv);
-
-            fetch(year.url)
-            .then(res=>res.json())
-            .then(files=>{
-
-                files.forEach(file=>{
-                    if(file.name.endsWith(".zip") || file.name.endsWith(".kmz")){
-
-                        const layerId = file.download_url;
-                        allLayers[layerId]=file;
-
-                        const checkbox = createRadio(
-                            "layer",
-                            layerId,
-                            file.name,
-                            function(){
-                                toggleLayer(layerId);
-                            }
-                        );
-
-                        checkbox.style.marginLeft="30px";
-                        checkbox.classList.add("layerItem");
-
-                        document.getElementById("layerList").appendChild(checkbox);
-                    }
-                });
-
-            });
-
-        }
-        });
-
-    });
-
-}
-});
-
-});
-
-}
-
-function toggleLayer(url){
-
-if(loadedLayers[url]){
-    map.removeLayer(loadedLayers[url]);
-    delete loadedLayers[url];
-    return;
-}
-
-if(url.endsWith(".zip")){
-    shp(url).then(function(data){
-        const layer = L.geoJSON(data).addTo(map);
-        map.fitBounds(layer.getBounds());
-        loadedLayers[url]=layer;
-    });
-}
-
-if(url.endsWith(".kmz")){
-    const kmz = new L.KMZ();
-    kmz.load(url);
-    kmz.on("loaded", function(e){
-        map.fitBounds(e.layer.getBounds());
-    });
-    kmz.addTo(map);
-    loadedLayers[url]=kmz;
-}
-
-}
-
-// ===============================
-// SEARCH
-// ===============================
-document.getElementById("searchInput").addEventListener("keyup", function(){
-let filter = this.value.toLowerCase();
-let items = document.querySelectorAll(".layerItem");
-
-items.forEach(item=>{
-    if(item.innerText.toLowerCase().includes(filter)){
-        item.style.display="";
-    }else{
-        item.style.display="none";
+// 6. Checkbox toggles
+document.getElementById('cb_roads').addEventListener('change', function() {
+    if(this.checked) {
+        loadGeoJSON('data/roads.geojson', layerRoads);
+    } else {
+        map.removeLayer(layerRoads);
+        layerRoads.clearLayers();
     }
 });
+document.getElementById('cb_points').addEventListener('change', function() {
+    if(this.checked) {
+        loadGeoJSON('data/points.geojson', layerPoints);
+    } else {
+        map.removeLayer(layerPoints);
+        layerPoints.clearLayers();
+    }
+});
+document.getElementById('cb_polygons').addEventListener('change', function() {
+    if(this.checked) {
+        loadGeoJSON('data/polygons.geojson', layerPolygons);
+    } else {
+        map.removeLayer(layerPolygons);
+        layerPolygons.clearLayers();
+    }
 });
 
-loadRepo();
+// 7. Search control (Leaflet Geocoder)
+L.Control.geocoder({
+    defaultMarkGeocode: true
+}).addTo(map);
 
 </script>
 </body>
