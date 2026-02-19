@@ -1,93 +1,11 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>WebGIS Folder Tahun Viewer</title>
-
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
-<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
-<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-
-<style>
-body { margin:0; display:flex; font-family:Arial; }
-#sidebar {
-    width:280px;
-    background:#f4f4f4;
-    padding:10px;
-    overflow:auto;
-    border-right:1px solid #ccc;
-}
-#map { flex:1; height:100vh; }
-.folder-title {
-    font-weight:bold;
-    margin-top:10px;
-}
-.year-item {
-    margin-left:15px;
-    margin-top:5px;
-}
-</style>
-</head>
-
-<body>
-
-<div id="sidebar">
-    <h3>Layer Berdasarkan Tahun</h3>
-    <div id="folderList"></div>
-</div>
-
-<div id="map"></div>
-
-<script>
-
 // ===============================
-// 1️⃣ BATAS INDONESIA
-// ===============================
-var indonesiaBounds = [
-    [-11.5, 94.5],
-    [6.5, 141.5]
-];
-
-var map = L.map("map", {
-    maxBounds: indonesiaBounds,
-    maxBoundsViscosity: 1.0,
-    minZoom: 5,
-    maxZoom: 18
-}).fitBounds(indonesiaBounds);
-
-// ===============================
-// 2️⃣ BASEMAP
-// ===============================
-var osm = L.tileLayer(
-    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    { attribution:"© OpenStreetMap" }
-).addTo(map);
-
-var satellite = L.tileLayer(
-    "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
-    { attribution:"Satellite" }
-);
-
-L.control.layers({
-    "OpenStreetMap": osm,
-    "Satellite": satellite
-}).addTo(map);
-
-// ===============================
-// 3️⃣ SEARCH
-// ===============================
-L.Control.geocoder().addTo(map);
-
-// ===============================
-// 4️⃣ LOAD FOLDER /file → kategori → tahun
+// 4️⃣ LOAD FOLDER + SUBSUBFOLDER (TAHUN)
 // ===============================
 
-var baseAPI = "https://api.github.com/repos/GeoSpatialNusantara/WebGis/contents/file";
+var folderAPI = "https://api.github.com/repos/GeoSpatialNusantara/WebGis/contents/file";
 var activeLayers = {};
 
-fetch(baseAPI)
+fetch(folderAPI)
 .then(res => {
     if (!res.ok) throw new Error("Folder /file tidak ditemukan");
     return res.json();
@@ -100,12 +18,14 @@ fetch(baseAPI)
 
         if (category.type === "dir") {
 
+            // ===== Folder Utama =====
             let title = document.createElement("div");
-            title.className = "folder-title";
+            title.className = "folder-item";
+            title.style.fontWeight = "bold";
             title.textContent = category.name;
             container.appendChild(title);
 
-            // Load subfolder tahun
+            // ===== Load Subfolder (Tahun) =====
             fetch(category.url)
             .then(r => r.json())
             .then(yearFolders => {
@@ -115,7 +35,7 @@ fetch(baseAPI)
                     if (year.type === "dir") {
 
                         let yearDiv = document.createElement("div");
-                        yearDiv.className = "year-item";
+                        yearDiv.style.marginLeft = "15px";
 
                         let checkbox = document.createElement("input");
                         checkbox.type = "checkbox";
@@ -195,8 +115,3 @@ fetch(baseAPI)
     document.getElementById("folderList").textContent =
         "Struktur folder tidak ditemukan.";
 });
-
-</script>
-
-</body>
-</html>
