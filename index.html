@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>WebGIS Recursive Folder Viewer</title>
+<title>WebGIS Tahun Viewer</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -13,33 +13,31 @@
 <style>
 body { margin:0; display:flex; font-family:Arial; }
 #sidebar {
-    width:280px;
+    width:260px;
     background:#f4f4f4;
     padding:10px;
     overflow:auto;
     border-right:1px solid #ccc;
 }
 #map { flex:1; height:100vh; }
-.folder { font-weight:bold; cursor:pointer; margin-top:8px; }
-.file { margin-left:20px; }
-.subfolder { margin-left:15px; }
+.year { margin-top:8px; font-weight:bold; }
 </style>
 </head>
 
 <body>
 
 <div id="sidebar">
-    <h3>Repository Structure</h3>
-    <div id="tree"></div>
+    <h3>Data Berdasarkan Tahun</h3>
+    <div id="yearList"></div>
 </div>
 
 <div id="map"></div>
 
 <script>
 
-// ===============================
+// ==========================
 // 1️⃣ BATAS INDONESIA
-// ===============================
+// ==========================
 var indonesiaBounds = [
     [-11.5, 94.5],
     [6.5, 141.5]
@@ -52,9 +50,9 @@ var map = L.map("map", {
     maxZoom: 18
 }).fitBounds(indonesiaBounds);
 
-// ===============================
+// ==========================
 // 2️⃣ BASEMAP
-// ===============================
+// ==========================
 var osm = L.tileLayer(
     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     { attribution:"© OpenStreetMap" }
@@ -70,108 +68,102 @@ L.control.layers({
     "Satellite": satellite
 }).addTo(map);
 
-// ===============================
+// ==========================
 // 3️⃣ SEARCH
-// ===============================
+// ==========================
 L.Control.geocoder().addTo(map);
 
-// ===============================
-// 4️⃣ LOAD REPOSITORY RECURSIVE
-// ===============================
-
+// ==========================
+// 4️⃣ LOAD HANYA FOLDER TAHUN
+// ==========================
 var repoRoot = "https://api.github.com/repos/GeoSpatialNusantara/WebGis/contents";
 var activeLayers = {};
 
-function loadFolder(url, container) {
-
-    fetch(url)
-    .then(res => res.json())
-    .then(items => {
-
-        items.forEach(item => {
-
-            // Skip index.html
-            if (item.name.toLowerCase() === "index.html") return;
-
-            if (item.type === "dir") {
-
-                let folderDiv = document.createElement("div");
-                folderDiv.className = "folder";
-                folderDiv.textContent = "📁 " + item.name;
-
-                let subContainer = document.createElement("div");
-                subContainer.className = "subfolder";
-                subContainer.style.display = "none";
-
-                folderDiv.onclick = function() {
-                    subContainer.style.display =
-                        subContainer.style.display === "none" ? "block" : "none";
-                };
-
-                container.appendChild(folderDiv);
-                container.appendChild(subContainer);
-
-                // Recursive call
-                loadFolder(item.url, subContainer);
-
-            }
-
-            if (item.type === "file") {
-
-                let fileDiv = document.createElement("div");
-                fileDiv.className = "file";
-
-                let checkbox = document.createElement("input");
-                checkbox.type = "checkbox";
-
-                checkbox.onchange = function() {
-
-                    if (this.checked && item.name.endsWith(".geojson")) {
-
-                        fetch(item.download_url)
-                        .then(r => r.json())
-                        .then(data => {
-
-                            var geo = L.geoJSON(data, {
-                                onEachFeature: function(feature, layer) {
-                                    if (feature.properties) {
-                                        layer.bindPopup(
-                                            Object.entries(feature.properties)
-                                            .map(([k,v]) => k + ": " + v)
-                                            .join("<br>")
-                                        );
-                                    }
-                                }
-                            }).addTo(map);
-
-                            activeLayers[item.name] = geo;
-                        });
-
-                    } else {
-
-                        if (activeLayers[item.name]) {
-                            map.removeLayer(activeLayers[item.name]);
-                            delete activeLayers[item.name];
-                        }
-
-                    }
-                };
-
-                fileDiv.appendChild(checkbox);
-                fileDiv.appendChild(
-                    document.createTextNode(" 📄 " + item.name)
-                );
-
-                container.appendChild(fileDiv);
-            }
-
-        });
-
-    });
+// fungsi cek apakah nama folder adalah tahun (4 digit angka)
+function isYearFolder(name) {
+    return /^\d{4}$/.test(name);
 }
 
-// Load root
-loadFolder(repoRoot, document.getElementById("tree"));
+fetch(repoRoot)
+.then(res => res.json())
+.then(items => {
+
+    let container = document.getElementById("yearList");
+
+    items.forEach(item => {
+
+        if (item.type === "dir" && isYearFolder(item.name)) {
+
+            let div = document.createElement("div");
+            div.className = "year";
+
+            let checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+
+            checkbox.onchange = function() {
+
+                if (this.checked) {
+
+                    fetch(item.url)
+                    .then(r => r.json())
+                    .then(files => {
+
+                        files.forEach(file => {
+
+                            if (file.type === "file" && file.name.endsWith(".geojson")) {
+
+                                fetch(file.download_url)
+                                .then(r => r.json())
+                                .then(data => {
+
+                                    var geo = L.geoJSON(data, {
+                                        onEachFeature: function(feature, layer) {
+                                            if (feature.properties) {
+                                                layer.bindPopup(
+                                                    Object.entries(feature.properties)
+                                                    .map(([k,v]) => k + ": " + v)
+                                                    .join("<br>")
+                                                );
+                                            }
+                                        }
+                                    }).addTo(map);
+
+                                    activeLayers[file.path] = geo;
+                                });
+                            }
+
+                        });
+
+                    });
+
+                } else {
+
+                    // hapus semua layer dalam folder tahun tsb
+                    Object.keys(activeLayers).forEach(key => {
+                        if (key.startsWith(item.name + "/")) {
+                            map.removeLayer(activeLayers[key]);
+                            delete activeLayers[key];
+                        }
+                    });
+
+                }
+            };
+
+            div.appendChild(checkbox);
+            div.appendChild(
+                document.createTextNode(" " + item.name)
+            );
+
+            container.appendChild(div);
+        }
+
+    });
+
+})
+.catch(err => {
+    document.getElementById("yearList").textContent =
+        "Gagal memuat repository.";
+});
 
 </script>
 
