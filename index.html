@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>WebGIS Subfolder from /file</title>
+<title>WebGIS Folder Tahun Viewer</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -13,21 +13,28 @@
 <style>
 body { margin:0; display:flex; font-family:Arial; }
 #sidebar {
-    width:250px;
+    width:280px;
     background:#f4f4f4;
     padding:10px;
     overflow:auto;
     border-right:1px solid #ccc;
 }
 #map { flex:1; height:100vh; }
-.folder-item { margin-bottom:8px; }
+.folder-title {
+    font-weight:bold;
+    margin-top:10px;
+}
+.year-item {
+    margin-left:15px;
+    margin-top:5px;
+}
 </style>
 </head>
 
 <body>
 
 <div id="sidebar">
-    <h3>Layer Folder (/file)</h3>
+    <h3>Layer Berdasarkan Tahun</h3>
     <div id="folderList"></div>
 </div>
 
@@ -74,95 +81,111 @@ L.control.layers({
 L.Control.geocoder().addTo(map);
 
 // ===============================
-// 4️⃣ LOAD HANYA SUBFOLDER DI /file
+// 4️⃣ LOAD FOLDER /file → kategori → tahun
 // ===============================
 
-// Path API ke folder "file"
-var folderAPI = "https://api.github.com/repos/GeoSpatialNusantara/WebGis/contents/file";
+var baseAPI = "https://api.github.com/repos/GeoSpatialNusantara/WebGis/contents/file";
 var activeLayers = {};
 
-fetch(folderAPI)
+fetch(baseAPI)
 .then(res => {
     if (!res.ok) throw new Error("Folder /file tidak ditemukan");
     return res.json();
 })
-.then(items => {
+.then(categories => {
 
     let container = document.getElementById("folderList");
 
-    items.forEach(item => {
+    categories.forEach(category => {
 
-        // Tampilkan hanya subfolder
-        if (item.type === "dir") {
+        if (category.type === "dir") {
 
-            let div = document.createElement("div");
-            div.className = "folder-item";
+            let title = document.createElement("div");
+            title.className = "folder-title";
+            title.textContent = category.name;
+            container.appendChild(title);
 
-            let checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
+            // Load subfolder tahun
+            fetch(category.url)
+            .then(r => r.json())
+            .then(yearFolders => {
 
-            checkbox.onchange = function() {
+                yearFolders.forEach(year => {
 
-                if (this.checked) {
+                    if (year.type === "dir") {
 
-                    fetch(item.url)
-                    .then(r => r.json())
-                    .then(files => {
+                        let yearDiv = document.createElement("div");
+                        yearDiv.className = "year-item";
 
-                        files.forEach(file => {
+                        let checkbox = document.createElement("input");
+                        checkbox.type = "checkbox";
 
-                            if (file.name.endsWith(".geojson")) {
+                        checkbox.onchange = function() {
 
-                                fetch(file.download_url)
+                            if (this.checked) {
+
+                                fetch(year.url)
                                 .then(r => r.json())
-                                .then(data => {
+                                .then(files => {
 
-                                    var geo = L.geoJSON(data, {
-                                        onEachFeature: function(feature, layer) {
-                                            if (feature.properties) {
-                                                layer.bindPopup(
-                                                    Object.entries(feature.properties)
-                                                    .map(([k,v]) => k + ": " + v)
-                                                    .join("<br>")
-                                                );
-                                            }
+                                    files.forEach(file => {
+
+                                        if (file.name.endsWith(".geojson")) {
+
+                                            fetch(file.download_url)
+                                            .then(r => r.json())
+                                            .then(data => {
+
+                                                var geo = L.geoJSON(data, {
+                                                    onEachFeature: function(feature, layer) {
+                                                        if (feature.properties) {
+                                                            layer.bindPopup(
+                                                                Object.entries(feature.properties)
+                                                                .map(([k,v]) => k + ": " + v)
+                                                                .join("<br>")
+                                                            );
+                                                        }
+                                                    }
+                                                }).addTo(map);
+
+                                                if (!activeLayers[year.name]) {
+                                                    activeLayers[year.name] = [];
+                                                }
+
+                                                activeLayers[year.name].push(geo);
+
+                                            });
+
                                         }
-                                    }).addTo(map);
 
-                                    if (!activeLayers[item.name]) {
-                                        activeLayers[item.name] = [];
-                                    }
-
-                                    activeLayers[item.name].push(geo);
+                                    });
 
                                 });
 
+                            } else {
+
+                                if (activeLayers[year.name]) {
+                                    activeLayers[year.name].forEach(layer => {
+                                        map.removeLayer(layer);
+                                    });
+                                    delete activeLayers[year.name];
+                                }
+
                             }
+                        };
 
-                        });
+                        yearDiv.appendChild(checkbox);
+                        yearDiv.appendChild(
+                            document.createTextNode(" " + year.name)
+                        );
 
-                    });
-
-                } else {
-
-                    if (activeLayers[item.name]) {
-
-                        activeLayers[item.name].forEach(layer => {
-                            map.removeLayer(layer);
-                        });
-
-                        delete activeLayers[item.name];
+                        container.appendChild(yearDiv);
                     }
 
-                }
-            };
+                });
 
-            div.appendChild(checkbox);
-            div.appendChild(
-                document.createTextNode(" " + item.name)
-            );
+            });
 
-            container.appendChild(div);
         }
 
     });
@@ -170,7 +193,7 @@ fetch(folderAPI)
 })
 .catch(err => {
     document.getElementById("folderList").textContent =
-        "Folder /file tidak ditemukan atau kosong.";
+        "Struktur folder tidak ditemukan.";
 });
 
 </script>
