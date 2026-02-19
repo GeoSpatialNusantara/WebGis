@@ -1,29 +1,96 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>WebGIS Subfolder + Tahun</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+<style>
+body { margin:0; display:flex; font-family:Arial; }
+#sidebar {
+    width:280px;
+    background:#f4f4f4;
+    padding:10px;
+    overflow:auto;
+    border-right:1px solid #ccc;
+}
+#map { flex:1; height:100vh; }
+.folder-title { font-weight:bold; margin-top:10px; }
+.subfolder { margin-left:10px; }
+.year-item { margin-left:20px; }
+</style>
+</head>
+
+<body>
+
+<div id="sidebar">
+    <h3>Layer Folder (/file)</h3>
+    <div id="folderList"></div>
+</div>
+
+<div id="map"></div>
+
+<script>
+
 // ===============================
-// 4️⃣ LOAD FOLDER + SUBFOLDER + TAHUN
+// 1. BATAS INDONESIA
+// ===============================
+var indonesiaBounds = [
+    [-11.5, 94.5],
+    [6.5, 141.5]
+];
+
+var map = L.map("map", {
+    maxBounds: indonesiaBounds,
+    maxBoundsViscosity: 1.0,
+    minZoom: 5,
+    maxZoom: 18
+}).fitBounds(indonesiaBounds);
+
+// ===============================
+// 2. BASEMAP
+// ===============================
+var osm = L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    { attribution:"© OpenStreetMap" }
+).addTo(map);
+
+L.control.layers({
+    "OpenStreetMap": osm
+}).addTo(map);
+
+// ===============================
+// 3. SEARCH
+// ===============================
+L.Control.geocoder().addTo(map);
+
+// ===============================
+// 4. LOAD FOLDER + SUBFOLDER + TAHUN
 // ===============================
 
 var folderAPI = "https://api.github.com/repos/GeoSpatialNusantara/WebGis/contents/file";
 var activeLayers = {};
 
 fetch(folderAPI)
-.then(res => {
-    if (!res.ok) throw new Error("Folder /file tidak ditemukan");
-    return res.json();
-})
+.then(response => response.json())
 .then(folders => {
 
-    let container = document.getElementById("folderList");
+    var container = document.getElementById("folderList");
 
     folders.forEach(folder => {
 
         if (folder.type === "dir") {
 
-            // Judul Folder Utama
-            let title = document.createElement("div");
-            title.innerHTML = "<b>" + folder.name + "</b>";
-            container.appendChild(title);
+            var folderTitle = document.createElement("div");
+            folderTitle.className = "folder-title";
+            folderTitle.textContent = folder.name;
+            container.appendChild(folderTitle);
 
-            // Load Subfolder (Kategori)
             fetch(folder.url)
             .then(res => res.json())
             .then(subfolders => {
@@ -32,14 +99,11 @@ fetch(folderAPI)
 
                     if (sub.type === "dir") {
 
-                        let subDiv = document.createElement("div");
-                        subDiv.style.marginLeft = "10px";
+                        var subDiv = document.createElement("div");
+                        subDiv.className = "subfolder";
+                        subDiv.textContent = "📁 " + sub.name;
+                        container.appendChild(subDiv);
 
-                        let subTitle = document.createElement("div");
-                        subTitle.innerHTML = "📁 " + sub.name;
-                        subDiv.appendChild(subTitle);
-
-                        // Load Sub-Subfolder (TAHUN)
                         fetch(sub.url)
                         .then(res => res.json())
                         .then(yearFolders => {
@@ -48,10 +112,10 @@ fetch(folderAPI)
 
                                 if (year.type === "dir") {
 
-                                    let yearDiv = document.createElement("div");
-                                    yearDiv.style.marginLeft = "20px";
+                                    var yearDiv = document.createElement("div");
+                                    yearDiv.className = "year-item";
 
-                                    let checkbox = document.createElement("input");
+                                    var checkbox = document.createElement("input");
                                     checkbox.type = "checkbox";
 
                                     checkbox.onchange = function() {
@@ -70,17 +134,7 @@ fetch(folderAPI)
                                                         .then(res => res.json())
                                                         .then(data => {
 
-                                                            var geoLayer = L.geoJSON(data, {
-                                                                onEachFeature: function(feature, layer) {
-                                                                    if (feature.properties) {
-                                                                        let popup = "";
-                                                                        for (let key in feature.properties) {
-                                                                            popup += key + ": " + feature.properties[key] + "<br>";
-                                                                        }
-                                                                        layer.bindPopup(popup);
-                                                                    }
-                                                                }
-                                                            }).addTo(map);
+                                                            var geoLayer = L.geoJSON(data).addTo(map);
 
                                                             if (!activeLayers[year.path]) {
                                                                 activeLayers[year.path] = [];
@@ -114,15 +168,13 @@ fetch(folderAPI)
                                         document.createTextNode(" " + year.name)
                                     );
 
-                                    subDiv.appendChild(yearDiv);
+                                    container.appendChild(yearDiv);
 
                                 }
 
                             });
 
                         });
-
-                        container.appendChild(subDiv);
 
                     }
 
@@ -135,7 +187,12 @@ fetch(folderAPI)
     });
 
 })
-.catch(err => {
+.catch(error => {
     document.getElementById("folderList").textContent =
         "Struktur folder tidak ditemukan.";
 });
+
+</script>
+
+</body>
+</html>
