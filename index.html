@@ -1,95 +1,196 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8" />
+<meta charset="utf-8"/>
 <title>GSN WebGIS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-html, body {
-    margin: 0;
-    height: 100%;
+html,body{margin:0;height:100%;}
+#map{height:100%;}
+
+.sidebar{
+position:absolute;
+top:0;
+left:-320px;
+width:300px;
+height:100%;
+background:#111;
+color:white;
+padding:15px;
+overflow:auto;
+transition:.3s;
+z-index:1000;
 }
-#map {
-    height: 100%;
-    width: 100%;
+.sidebar.active{left:0;}
+
+.toggle-btn{
+position:absolute;
+top:15px;
+left:15px;
+background:white;
+padding:8px 10px;
+border-radius:6px;
+cursor:pointer;
+z-index:1100;
 }
-.control {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    background: white;
-    padding: 10px;
-    border-radius: 6px;
-    z-index: 1000;
-    box-shadow: 0 2px 6px rgba(0,0,0,.3);
-}
+
+label{display:block;margin:5px 0;}
+h3{margin-top:15px;border-bottom:1px solid #444;padding-bottom:5px;}
 </style>
 </head>
 <body>
 
 <div id="map"></div>
 
-<div class="control">
-<b>Basemap</b><br>
-<label><input type="radio" name="base" value="osm" checked> OSM</label><br>
-<label><input type="radio" name="base" value="esri"> ESRI Satellite</label>
+<div class="toggle-btn" id="toggleBtn">☰</div>
+
+<div class="sidebar" id="sidebar">
+<h3>Basemap</h3>
+<label><input type="radio" name="base" value="osm" checked> OSM</label>
+<label><input type="radio" name="base" value="google"> Google Satellite</label>
+
+<h3>Layer</h3>
+<div id="layerContainer"></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/shpjs@latest/dist/shp.min.js"></script>
+<script src="https://unpkg.com/togeojson@0.16.0/dist/togeojson.js"></script>
 
 <script>
 
-// ================= BATAS INDONESIA =================
+/* ================= MAP ================= */
+
 var indonesiaBounds = [
-    [-11, 94],
-    [6, 141]
+[-11,94],
+[6,141]
 ];
 
-// ================= MAP =================
-var map = L.map('map', {
-    zoomControl: true,
-    minZoom: 5,
-    maxBounds: indonesiaBounds,
-    maxBoundsViscosity: 1.0
-}).setView([-2.5, 118], 5);
+var map = L.map('map',{
+minZoom:5,
+maxBounds: indonesiaBounds,
+maxBoundsViscosity:1
+}).setView([-2.5,118],5);
 
-// ================= OSM =================
+/* ================= BASEMAP ================= */
+
 var osm = L.tileLayer(
-    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    { maxZoom: 19 }
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
 ).addTo(map);
 
-// ================= ESRI SATELLITE =================
-var esriSat = L.tileLayer(
-    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    { maxZoom: 19 }
-);
-
-// ================= ESRI LABEL =================
-var esriLabel = L.tileLayer(
-    'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-    { maxZoom: 19 }
-);
-
-// ================= SWITCH =================
-document.querySelectorAll('input[name="base"]').forEach(radio => {
-    radio.addEventListener('change', function() {
-
-        if (this.value === "osm") {
-            map.removeLayer(esriSat);
-            map.removeLayer(esriLabel);
-            map.addLayer(osm);
-        } else {
-            map.removeLayer(osm);
-            map.addLayer(esriSat);
-            map.addLayer(esriLabel);
-        }
-
-    });
+var google = L.tileLayer(
+'https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+{
+maxZoom:20,
+subdomains:['mt0','mt1','mt2','mt3']
 });
+
+document.querySelectorAll('input[name="base"]').forEach(r=>{
+r.addEventListener('change',function(){
+if(this.value==="osm"){
+map.removeLayer(google);
+map.addLayer(osm);
+}else{
+map.removeLayer(osm);
+map.addLayer(google);
+}
+});
+});
+
+/* ================= SIDEBAR ================= */
+
+var sidebar=document.getElementById("sidebar");
+var toggle=document.getElementById("toggleBtn");
+
+toggle.onclick=function(){
+sidebar.classList.toggle("active");
+};
+
+/* ================= LOAD REPO ================= */
+
+var repo="GeoSpatialNusantara/WebGis";
+var container=document.getElementById("layerContainer");
+
+var layersStore={};
+
+function loadFolder(url, kategori=null, tahun=null){
+
+fetch(url)
+.then(res=>res.json())
+.then(data=>{
+data.forEach(item=>{
+
+if(item.type==="dir"){
+
+if(!kategori){
+createKategori(item);
+loadFolder(item.url,item.name,null);
+}else if(!tahun){
+createTahun(item,kategori);
+loadFolder(item.url,kategori,item.name);
+}
+
+}
+
+if(item.type==="file"){
+
+if(item.name.endsWith(".zip") || item.name.endsWith(".kmz")){
+loadFile(item,kategori,tahun);
+}
+
+}
+
+});
+});
+}
+
+function createKategori(folder){
+var id="kat_"+folder.name;
+layersStore[folder.name]={};
+
+var label=document.createElement("label");
+label.innerHTML=`<input type="radio" name="kat" id="${id}"> ${folder.name}`;
+container.appendChild(label);
+}
+
+function createTahun(folder,kategori){
+
+layersStore[kategori][folder.name]=[];
+
+var label=document.createElement("label");
+label.style.marginLeft="15px";
+label.innerHTML=`<input type="radio" name="th_${kategori}"> ${folder.name}`;
+container.appendChild(label);
+}
+
+function loadFile(file,kategori,tahun){
+
+fetch(file.download_url)
+.then(res=>res.arrayBuffer())
+.then(buffer=>{
+
+if(file.name.endsWith(".zip")){
+shp(buffer).then(geojson=>{
+var layer=L.geoJSON(geojson);
+layersStore[kategori][tahun].push(layer);
+});
+}
+
+if(file.name.endsWith(".kmz")){
+var parser = new DOMParser();
+var kml = parser.parseFromString(buffer, "text/xml");
+var geojson = toGeoJSON.kml(kml);
+var layer=L.geoJSON(geojson);
+layersStore[kategori][tahun].push(layer);
+}
+
+});
+}
+
+loadFolder(`https://api.github.com/repos/${repo}/contents/`);
 
 </script>
 
