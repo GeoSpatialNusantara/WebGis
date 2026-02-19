@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>WebGIS - Folder Files</title>
+<title>WebGIS Repository Folder Viewer</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -12,7 +12,7 @@
 
 <style>
 #map { height: 75vh; }
-#fileList { padding:10px; background:#f5f5f5; }
+#folderList { padding:10px; background:#f5f5f5; }
 .file-content {
     white-space: pre-wrap;
     background:#eee;
@@ -26,8 +26,8 @@
 
 <body>
 
-<h3>Isi Folder: files/</h3>
-<div id="fileList"></div>
+<h3>Isi Folder Repository</h3>
+<div id="folderList"></div>
 
 <div id="map"></div>
 
@@ -69,82 +69,97 @@ L.control.layers({
 // ==========================
 // 3️⃣ SEARCH
 // ==========================
-L.Control.geocoder({
-    defaultMarkGeocode: true
-}).addTo(map);
+L.Control.geocoder().addTo(map);
 
 // ==========================
-// 4️⃣ LOAD FOLDER files/
+// 4️⃣ AMBIL FOLDER SAJA
 // ==========================
+
 var activeLayers = {};
 
-fetch("https://api.github.com/repos/GeoSpatialNusantara/WebGis/contents/files")
+fetch("https://api.github.com/repos/GeoSpatialNusantara/WebGis/contents")
 .then(res => res.json())
-.then(files => {
+.then(items => {
 
-    let container = document.getElementById("fileList");
+    let container = document.getElementById("folderList");
 
-    files.forEach(file => {
+    items.forEach(item => {
 
-        if (file.type === "file") {
+        // hanya tampilkan folder (bukan file index.html)
+        if (item.type === "dir") {
 
-            let label = document.createElement("label");
-            label.style.display = "block";
+            let folderTitle = document.createElement("h4");
+            folderTitle.textContent = "Folder: " + item.name;
+            container.appendChild(folderTitle);
 
-            let checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
+            // ambil isi folder
+            fetch(item.url)
+            .then(r => r.json())
+            .then(files => {
 
-            checkbox.onchange = function() {
+                files.forEach(file => {
 
-                if (this.checked) {
+                    let label = document.createElement("label");
+                    label.style.display = "block";
 
-                    fetch(file.download_url)
-                    .then(r => r.text())
-                    .then(text => {
+                    let checkbox = document.createElement("input");
+                    checkbox.type = "checkbox";
 
-                        document.getElementById("fileContents").textContent = text;
+                    checkbox.onchange = function() {
 
-                        // jika geojson → tampilkan di peta
-                        if (file.name.endsWith(".geojson")) {
+                        if (this.checked) {
 
-                            var geoLayer = L.geoJSON(JSON.parse(text), {
-                                onEachFeature: function (feature, layer) {
-                                    if (feature.properties) {
-                                        layer.bindPopup(
-                                            Object.entries(feature.properties)
-                                                .map(([k,v]) => "<b>"+k+"</b>: "+v)
-                                                .join("<br>")
-                                        );
-                                    }
+                            fetch(file.download_url)
+                            .then(r => r.text())
+                            .then(text => {
+
+                                document.getElementById("fileContents").textContent = text;
+
+                                // tampilkan jika geojson
+                                if (file.name.endsWith(".geojson")) {
+
+                                    var geo = L.geoJSON(JSON.parse(text), {
+                                        onEachFeature: function(feature, layer){
+                                            if (feature.properties){
+                                                layer.bindPopup(
+                                                    JSON.stringify(feature.properties)
+                                                );
+                                            }
+                                        }
+                                    }).addTo(map);
+
+                                    activeLayers[file.name] = geo;
                                 }
-                            }).addTo(map);
 
-                            activeLayers[file.name] = geoLayer;
+                            });
+
+                        } else {
+
+                            if (activeLayers[file.name]) {
+                                map.removeLayer(activeLayers[file.name]);
+                                delete activeLayers[file.name];
+                            }
+
+                            document.getElementById("fileContents").textContent = "";
                         }
-                    });
+                    };
 
-                } else {
+                    label.appendChild(checkbox);
+                    label.appendChild(document.createTextNode(" " + file.name));
+                    container.appendChild(label);
 
-                    // hapus layer jika ada
-                    if (activeLayers[file.name]) {
-                        map.removeLayer(activeLayers[file.name]);
-                        delete activeLayers[file.name];
-                    }
+                });
 
-                    document.getElementById("fileContents").textContent = "";
-                }
-            };
+            });
 
-            label.appendChild(checkbox);
-            label.appendChild(document.createTextNode(" " + file.name));
-            container.appendChild(label);
         }
+
     });
 
 })
 .catch(err => {
-    document.getElementById("fileList").textContent =
-        "Folder 'files/' tidak ditemukan atau kosong.";
+    document.getElementById("folderList").textContent =
+        "Gagal memuat folder: " + err;
 });
 
 </script>
