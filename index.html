@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>GSN WebGIS</title>
+<title>GSN WebGIS PRO</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -12,7 +12,7 @@ body { margin:0; font-family:Arial; }
 
 #map { height:100vh; width:100%; }
 
-/* ================= SIDEBAR DATA ================= */
+/* ================= SIDEBAR ================= */
 #sidebar {
     position:absolute;
     left:0;
@@ -23,12 +23,14 @@ body { margin:0; font-family:Arial; }
     color:white;
     padding:15px;
     overflow:auto;
-    transition:0.3s;
+    transition:all 0.4s ease;
     z-index:1000;
+    opacity:1;
 }
 
 #sidebar.collapsed {
-    left:-320px;
+    transform:translateX(-100%);
+    opacity:0;
 }
 
 .folder { margin-top:10px; }
@@ -42,18 +44,18 @@ button {
     cursor:pointer;
 }
 
-/* Tombol hamburger */
+/* Hamburger */
 #toggleBtn {
     position:absolute;
     top:15px;
     left:15px;
     z-index:1100;
     background:white;
-    border-radius:5px;
-    padding:8px 10px;
+    border-radius:6px;
+    padding:8px 12px;
     cursor:pointer;
     font-size:18px;
-    box-shadow:0 2px 5px rgba(0,0,0,0.3);
+    box-shadow:0 3px 8px rgba(0,0,0,0.3);
 }
 
 /* ================= BASEMAP PANEL ================= */
@@ -62,11 +64,30 @@ button {
     right:15px;
     top:15px;
     background:white;
-    padding:10px;
-    border-radius:8px;
-    box-shadow:0 2px 6px rgba(0,0,0,0.3);
+    padding:12px;
+    border-radius:10px;
+    box-shadow:0 3px 10px rgba(0,0,0,0.3);
     z-index:1100;
     font-size:14px;
+}
+
+/* ================= SEARCH ================= */
+#searchBox {
+    position:absolute;
+    top:15px;
+    left:70px;
+    z-index:1100;
+    background:white;
+    padding:6px;
+    border-radius:8px;
+    box-shadow:0 3px 8px rgba(0,0,0,0.3);
+}
+
+#searchInput {
+    border:none;
+    outline:none;
+    padding:5px;
+    width:200px;
 }
 </style>
 </head>
@@ -74,6 +95,10 @@ button {
 <body>
 
 <div id="toggleBtn">☰</div>
+
+<div id="searchBox">
+    <input type="text" id="searchInput" placeholder="Cari lokasi...">
+</div>
 
 <div id="sidebar">
     <h3>DATA GSN</h3>
@@ -83,7 +108,7 @@ button {
 <div id="basemapPanel">
     <b>Basemap</b><br>
     <input type="radio" name="basemap" value="osm" checked> OpenStreetMap<br>
-    <input type="radio" name="basemap" value="sat"> Imagery
+    <input type="radio" name="basemap" value="sat"> Satellite
 </div>
 
 <div id="map"></div>
@@ -95,33 +120,34 @@ button {
 const username = "GeoSpatialNusantara";
 const repo = "WebGis";
 const rootFolder = "file";
-
 const baseAPI = `https://api.github.com/repos/${username}/${repo}/contents/${rootFolder}`;
 
 // ============================
-// MAP INIT
+// MAP INIT - ZOOM INDONESIA
 // ============================
 const map = L.map('map').setView([-2.5,118],5);
 
-// Basemap layers
+// OSM
 const osm = L.tileLayer(
     'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     { attribution:'© OpenStreetMap' }
 ).addTo(map);
 
-const imagery = L.tileLayer(
-    'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'
+// ESRI SATELLITE
+const satellite = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution:'Tiles © Esri' }
 );
 
 // Basemap switch
 document.querySelectorAll('input[name="basemap"]').forEach(radio=>{
     radio.onchange = function(){
         if(this.value === "osm"){
-            map.removeLayer(imagery);
+            map.removeLayer(satellite);
             osm.addTo(map);
         } else {
             map.removeLayer(osm);
-            imagery.addTo(map);
+            satellite.addTo(map);
         }
     };
 });
@@ -132,6 +158,28 @@ document.querySelectorAll('input[name="basemap"]').forEach(radio=>{
 document.getElementById("toggleBtn").onclick = function(){
     document.getElementById("sidebar").classList.toggle("collapsed");
 };
+
+// ============================
+// SEARCH LOKASI (NOMINATIM)
+// ============================
+document.getElementById("searchInput").addEventListener("keypress", async function(e){
+    if(e.key === "Enter"){
+        const query = this.value;
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`);
+        const data = await res.json();
+
+        if(data.length > 0){
+            const lat = data[0].lat;
+            const lon = data[0].lon;
+            map.setView([lat, lon], 13);
+            L.marker([lat,lon]).addTo(map)
+                .bindPopup(query)
+                .openPopup();
+        } else {
+            alert("Lokasi tidak ditemukan");
+        }
+    }
+});
 
 // ============================
 // DATA LAYER
