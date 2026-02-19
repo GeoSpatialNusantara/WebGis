@@ -36,9 +36,48 @@ body { margin:0; display:flex; font-family:Arial; }
 <script>
 
 // ===============================
-// 4️⃣ LOAD SUBFOLDER DALAM /file
+// 1️⃣ BATAS INDONESIA
+// ===============================
+var indonesiaBounds = [
+    [-11.5, 94.5],
+    [6.5, 141.5]
+];
+
+var map = L.map("map", {
+    maxBounds: indonesiaBounds,
+    maxBoundsViscosity: 1.0,
+    minZoom: 5,
+    maxZoom: 18
+}).fitBounds(indonesiaBounds);
+
+// ===============================
+// 2️⃣ BASEMAP
+// ===============================
+var osm = L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    { attribution:"© OpenStreetMap" }
+).addTo(map);
+
+var satellite = L.tileLayer(
+    "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    { attribution:"Satellite" }
+);
+
+L.control.layers({
+    "OpenStreetMap": osm,
+    "Satellite": satellite
+}).addTo(map);
+
+// ===============================
+// 3️⃣ SEARCH
+// ===============================
+L.Control.geocoder().addTo(map);
+
+// ===============================
+// 4️⃣ LOAD HANYA SUBFOLDER DI /file
 // ===============================
 
+// Path API ke folder "file"
 var folderAPI = "https://api.github.com/repos/GeoSpatialNusantara/WebGis/contents/file";
 var activeLayers = {};
 
@@ -47,106 +86,83 @@ fetch(folderAPI)
     if (!res.ok) throw new Error("Folder /file tidak ditemukan");
     return res.json();
 })
-.then(folders => {
+.then(items => {
 
     let container = document.getElementById("folderList");
-    container.innerHTML = "";
 
-    folders.forEach(folder => {
+    items.forEach(item => {
 
-        // hanya tampilkan folder
-        if (folder.type === "dir") {
+        // Tampilkan hanya subfolder
+        if (item.type === "dir") {
 
-            // tampilkan nama folder utama (tanpa checkbox)
-            let title = document.createElement("div");
-            title.style.fontWeight = "bold";
-            title.style.marginTop = "10px";
-            title.textContent = folder.name;
-            container.appendChild(title);
+            let div = document.createElement("div");
+            div.className = "folder-item";
 
-            // ambil isi folder utama (subfolder)
-            fetch(folder.url)
-            .then(r => r.json())
-            .then(subfolders => {
+            let checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
 
-                subfolders.forEach(sub => {
+            checkbox.onchange = function() {
 
-                    if (sub.type === "dir") {
+                if (this.checked) {
 
-                        let div = document.createElement("div");
-                        div.style.marginLeft = "15px";
+                    fetch(item.url)
+                    .then(r => r.json())
+                    .then(files => {
 
-                        let checkbox = document.createElement("input");
-                        checkbox.type = "checkbox";
+                        files.forEach(file => {
 
-                        checkbox.onchange = function() {
+                            if (file.name.endsWith(".geojson")) {
 
-                            if (this.checked) {
-
-                                fetch(sub.url)
+                                fetch(file.download_url)
                                 .then(r => r.json())
-                                .then(files => {
+                                .then(data => {
 
-                                    files.forEach(file => {
-
-                                        if (file.name.endsWith(".geojson")) {
-
-                                            fetch(file.download_url)
-                                            .then(r => r.json())
-                                            .then(data => {
-
-                                                var geo = L.geoJSON(data, {
-                                                    onEachFeature: function(feature, layer) {
-                                                        if (feature.properties) {
-                                                            layer.bindPopup(
-                                                                Object.entries(feature.properties)
-                                                                .map(([k,v]) => k + ": " + v)
-                                                                .join("<br>")
-                                                            );
-                                                        }
-                                                    }
-                                                }).addTo(map);
-
-                                                if (!activeLayers[sub.path]) {
-                                                    activeLayers[sub.path] = [];
-                                                }
-
-                                                activeLayers[sub.path].push(geo);
-
-                                            });
-
+                                    var geo = L.geoJSON(data, {
+                                        onEachFeature: function(feature, layer) {
+                                            if (feature.properties) {
+                                                layer.bindPopup(
+                                                    Object.entries(feature.properties)
+                                                    .map(([k,v]) => k + ": " + v)
+                                                    .join("<br>")
+                                                );
+                                            }
                                         }
+                                    }).addTo(map);
 
-                                    });
+                                    if (!activeLayers[item.name]) {
+                                        activeLayers[item.name] = [];
+                                    }
+
+                                    activeLayers[item.name].push(geo);
 
                                 });
 
-                            } else {
-
-                                if (activeLayers[sub.path]) {
-                                    activeLayers[sub.path].forEach(layer => {
-                                        map.removeLayer(layer);
-                                    });
-                                    delete activeLayers[sub.path];
-                                }
-
                             }
 
-                        };
+                        });
 
-                        div.appendChild(checkbox);
-                        div.appendChild(
-                            document.createTextNode(" " + sub.name)
-                        );
+                    });
 
-                        container.appendChild(div);
+                } else {
 
+                    if (activeLayers[item.name]) {
+
+                        activeLayers[item.name].forEach(layer => {
+                            map.removeLayer(layer);
+                        });
+
+                        delete activeLayers[item.name];
                     }
 
-                });
+                }
+            };
 
-            });
+            div.appendChild(checkbox);
+            div.appendChild(
+                document.createTextNode(" " + item.name)
+            );
 
+            container.appendChild(div);
         }
 
     });
