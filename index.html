@@ -8,28 +8,31 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
-body {
-    margin:0;
-    font-family:Arial, sans-serif;
-    display:flex;
-}
+body { margin:0; font-family:Arial; }
 
+#map { height:100vh; width:100%; }
+
+/* ================= SIDEBAR DATA ================= */
 #sidebar {
-    width:300px;
-    height:100vh;
-    overflow:auto;
+    position:absolute;
+    left:0;
+    top:0;
+    width:320px;
+    height:100%;
     background:#111;
     color:white;
     padding:15px;
+    overflow:auto;
+    transition:0.3s;
+    z-index:1000;
 }
 
-#map {
-    flex:1;
-    height:100vh;
+#sidebar.collapsed {
+    left:-320px;
 }
 
 .folder { margin-top:10px; }
-.year { margin-left:20px; margin-top:5px; }
+.sub { margin-left:20px; margin-top:5px; }
 
 button {
     background:none;
@@ -39,210 +42,203 @@ button {
     cursor:pointer;
 }
 
-input { cursor:pointer; }
+/* Tombol hamburger */
+#toggleBtn {
+    position:absolute;
+    top:15px;
+    left:15px;
+    z-index:1100;
+    background:white;
+    border-radius:5px;
+    padding:8px 10px;
+    cursor:pointer;
+    font-size:18px;
+    box-shadow:0 2px 5px rgba(0,0,0,0.3);
+}
 
+/* ================= BASEMAP PANEL ================= */
+#basemapPanel {
+    position:absolute;
+    right:15px;
+    top:15px;
+    background:white;
+    padding:10px;
+    border-radius:8px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.3);
+    z-index:1100;
+    font-size:14px;
+}
 </style>
 </head>
 
 <body>
+
+<div id="toggleBtn">☰</div>
 
 <div id="sidebar">
     <h3>DATA GSN</h3>
     <div id="folderList">Loading...</div>
 </div>
 
+<div id="basemapPanel">
+    <b>Basemap</b><br>
+    <input type="radio" name="basemap" value="osm" checked> OpenStreetMap<br>
+    <input type="radio" name="basemap" value="sat"> Imagery
+</div>
+
 <div id="map"></div>
 
 <script>
+// ============================
+// CONFIG REPO
+// ============================
+const username = "GeoSpatialNusantara";
+const repo = "WebGis";
+const rootFolder = "file";
+
+const baseAPI = `https://api.github.com/repos/${username}/${repo}/contents/${rootFolder}`;
 
 // ============================
-// CONFIG
+// MAP INIT
 // ============================
-
-const username = "agenkkkk";
-const repo = "GSN";
-const branch = "main";
-
-const baseAPI = `https://api.github.com/repos/${username}/${repo}/contents/files`;
-
-// ============================
-// MAP
-// ============================
-
 const map = L.map('map').setView([-2.5,118],5);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    attribution:'© OpenStreetMap'
-}).addTo(map);
+// Basemap layers
+const osm = L.tileLayer(
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { attribution:'© OpenStreetMap' }
+).addTo(map);
 
-let layers = {};
+const imagery = L.tileLayer(
+    'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'
+);
+
+// Basemap switch
+document.querySelectorAll('input[name="basemap"]').forEach(radio=>{
+    radio.onchange = function(){
+        if(this.value === "osm"){
+            map.removeLayer(imagery);
+            osm.addTo(map);
+        } else {
+            map.removeLayer(osm);
+            imagery.addTo(map);
+        }
+    };
+});
 
 // ============================
-// BUILD SIDEBAR (AUTO CATEGORY)
+// SIDEBAR COLLAPSE
 // ============================
+document.getElementById("toggleBtn").onclick = function(){
+    document.getElementById("sidebar").classList.toggle("collapsed");
+};
+
+// ============================
+// DATA LAYER
+// ============================
+const layers = {};
 
 async function buildSidebar(){
-
     const container = document.getElementById("folderList");
-    container.innerHTML = "Loading...";
+    container.innerHTML = "";
 
-    try {
+    const res = await fetch(baseAPI);
+    const folders = await res.json();
 
-        const res = await fetch(baseAPI);
-        const categories = await res.json();
+    folders.forEach(folder=>{
+        if(folder.type !== "dir") return;
 
-        container.innerHTML = "";
+        const div = document.createElement("div");
+        div.className = "folder";
 
-        categories.forEach(cat=>{
+        const btn = document.createElement("button");
+        btn.textContent = "▼ " + folder.name;
 
-            if(cat.type !== "dir") return;
+        const subBox = document.createElement("div");
+        subBox.style.display = "none";
 
-            const div = document.createElement("div");
-            div.className = "folder";
+        btn.onclick = ()=>{
+            subBox.style.display =
+                subBox.style.display === "none" ? "block" : "none";
+        };
 
-            const checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
+        div.appendChild(btn);
+        div.appendChild(subBox);
+        container.appendChild(div);
 
-            const btn = document.createElement("button");
-            btn.textContent = "▼ " + cat.name;
-
-            const yearDiv = document.createElement("div");
-            yearDiv.style.display = "none";
-
-            btn.onclick = ()=>{
-                yearDiv.style.display =
-                yearDiv.style.display === "none" ? "block" : "none";
-            };
-
-            // checkbox kategori → aktifkan semua tahun
-            checkbox.onchange = ()=>{
-                const yearChecks = yearDiv.querySelectorAll("input");
-                yearChecks.forEach(cb=>{
-                    cb.checked = checkbox.checked;
-                    cb.dispatchEvent(new Event("change"));
-                });
-            };
-
-            div.appendChild(checkbox);
-            div.appendChild(btn);
-
-            loadYears(cat.name, yearDiv);
-
-            div.appendChild(yearDiv);
-            container.appendChild(div);
-        });
-
-    } catch (err) {
-        container.innerHTML = "Gagal memuat data (Rate limit GitHub)";
-        console.error(err);
-    }
+        loadSubFolder(folder.name, subBox);
+    });
 }
 
-// ============================
-// LOAD TAHUN
-// ============================
+async function loadSubFolder(folder, container){
+    const res = await fetch(`${baseAPI}/${encodeURIComponent(folder)}`);
+    const subs = await res.json();
 
-async function loadYears(category, container){
+    subs.forEach(sub=>{
+        if(sub.type !== "dir") return;
 
-    try {
+        const div = document.createElement("div");
+        div.className = "sub";
 
-        const res = await fetch(`${baseAPI}/${encodeURIComponent(category)}`);
-        const years = await res.json();
+        const check = document.createElement("input");
+        check.type = "checkbox";
 
-        years.forEach(year=>{
+        check.onchange = ()=>{
+            toggleLayer(folder, sub.name, check.checked);
+        };
 
-            if(year.type !== "dir") return;
+        const label = document.createElement("label");
+        label.textContent = " " + sub.name;
 
-            const div = document.createElement("div");
-            div.className = "year";
-
-            const checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-
-            checkbox.onchange = ()=>{
-                toggleYear(category, year.name, checkbox.checked);
-            };
-
-            const label = document.createElement("label");
-            label.textContent = " " + year.name;
-
-            div.appendChild(checkbox);
-            div.appendChild(label);
-            container.appendChild(div);
-        });
-
-    } catch (err) {
-        console.error(err);
-    }
+        div.appendChild(check);
+        div.appendChild(label);
+        container.appendChild(div);
+    });
 }
 
-// ============================
-// TOGGLE TAHUN
-// ============================
-
-async function toggleYear(category, year, status){
-
-    const key = category + "_" + year;
+async function toggleLayer(folder, subfolder, status){
+    const key = `${folder}_${subfolder}`;
 
     if(status){
-
         const group = L.layerGroup().addTo(map);
         layers[key] = group;
 
-        try {
+        const res = await fetch(`${baseAPI}/${folder}/${subfolder}`);
+        const files = await res.json();
 
-            // Ambil folder project dalam tahun
-            const res = await fetch(`${baseAPI}/${encodeURIComponent(category)}/${year}`);
-            const projects = await res.json();
+        files.forEach(file=>{
+            if(file.name.endsWith(".zip")){
+                const lat = -8 + Math.random()*12;
+                const lng = 108 + Math.random()*14;
 
-            for(const proj of projects){
+                const marker = L.circleMarker([lat,lng],{
+                    radius:6,
+                    color:"#00ffff",
+                    fillOpacity:0.8
+                }).bindPopup(`
+                    <b>${folder}</b><br>
+                    ${subfolder}<br>
+                    <a href="${file.download_url}" target="_blank">
+                    Download ZIP
+                    </a>
+                `);
 
-                if(proj.type !== "dir") continue;
-
-                // Ambil isi folder project
-                const res2 = await fetch(proj.url);
-                const files = await res2.json();
-
-                files.forEach(file=>{
-
-                    if(file.name.endsWith(".zip")){
-
-                        // marker contoh (dummy)
-                        const lat = -7 + Math.random()*10;
-                        const lng = 110 + Math.random()*10;
-
-                        const marker = L.marker([lat,lng])
-                        .bindPopup(`
-                            <b>${category}</b><br>
-                            Tahun: ${year}<br>
-                            <a href="${file.download_url}" target="_blank">
-                            Download ZIP
-                            </a>
-                        `);
-
-                        group.addLayer(marker);
-                    }
-                });
+                group.addLayer(marker);
             }
+        });
 
-        } catch (err) {
-            console.error(err);
+        if(group.getLayers().length > 0){
+            map.fitBounds(group.getBounds(), {padding:[50,50]});
         }
 
     } else {
-
         if(layers[key]){
             map.removeLayer(layers[key]);
         }
     }
 }
 
-// ============================
-// START
-// ============================
-
 buildSidebar();
-
 </script>
 
 </body>
