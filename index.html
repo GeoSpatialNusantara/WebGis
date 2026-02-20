@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>WebGIS - GitHub Layer Loader FIXED</title>
+<title>WebGIS - Stable GitHub Loader</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -14,7 +14,7 @@
 body { margin:0; display:flex; font-family:Arial; }
 
 #sidebar{
-    width:340px;
+    width:350px;
     background:#f4f4f4;
     padding:15px;
     height:100vh;
@@ -47,7 +47,7 @@ body { margin:0; display:flex; font-family:Arial; }
 
 <div id="sidebar">
     <h3>📂 Layer Repository</h3>
-    <div id="folderList">Loading layer...</div>
+    <div id="folderList">Memuat layer...</div>
 </div>
 
 <div id="map"></div>
@@ -81,75 +81,22 @@ const repo = "WebGis";
 const branch = "main";
 const rootFolder = "file";
 
-const apiURL = `https://api.github.com/repos/${owner}/${repo}/contents/${rootFolder}?ref=${branch}`;
-
 let activeLayers = {};
 
-// ================= FILE CHECKBOX =================
-function createFile(name, url){
-
-    let div = document.createElement("div");
-    div.className = "file";
-
-    let cb = document.createElement("input");
-    cb.type = "checkbox";
-
-    cb.onchange = function(){
-
-        if(cb.checked){
-
-            fetch(url)
-            .then(res=>res.json())
-            .then(data=>{
-
-                let geo = L.geoJSON(data,{
-                    onEachFeature:function(feature, layer){
-                        if(feature.properties){
-                            layer.bindPopup(
-                                Object.entries(feature.properties)
-                                .map(([k,v]) => k+": "+v)
-                                .join("<br>")
-                            );
-                        }
-                    }
-                }).addTo(map);
-
-                activeLayers[name] = geo;
-
-                if(geo.getBounds().isValid()){
-                    map.fitBounds(geo.getBounds());
-                }
-
-            })
-            .catch(()=> alert("File tidak bisa dibaca"));
-
-        } else {
-
-            if(activeLayers[name]){
-                map.removeLayer(activeLayers[name]);
-                delete activeLayers[name];
-            }
-        }
-    };
-
-    div.appendChild(cb);
-    div.appendChild(document.createTextNode(" " + name));
-
-    return div;
-}
-
-// ================= RECURSIVE LOADER =================
-async function loadFolder(url, container){
+// ================= LOAD FOLDER =================
+async function loadFolder(folderPath, container){
 
     try {
 
-        const response = await fetch(url);
+        const apiURL = `https://api.github.com/repos/${owner}/${repo}/contents/${folderPath}?ref=${branch}`;
+        const response = await fetch(apiURL);
+
+        if(!response.ok) throw new Error("GitHub API error");
+
         const items = await response.json();
 
-        // kosongkan loading
         container.innerHTML = "";
 
-        // urutkan: folder dulu baru file
         items.sort((a,b)=>{
             if(a.type === b.type) return a.name.localeCompare(b.name);
             return a.type === "dir" ? -1 : 1;
@@ -157,7 +104,7 @@ async function loadFolder(url, container){
 
         for(const item of items){
 
-            // ===== FOLDER =====
+            // ================= FOLDER =================
             if(item.type === "dir"){
 
                 let folderDiv = document.createElement("div");
@@ -178,7 +125,7 @@ async function loadFolder(url, container){
                 childrenDiv.className = "children";
                 container.appendChild(childrenDiv);
 
-                // expand collapse
+                // Expand / collapse
                 folderTitle.onclick = function(){
                     if(childrenDiv.style.display === "none"){
                         childrenDiv.style.display = "block";
@@ -189,7 +136,7 @@ async function loadFolder(url, container){
                     }
                 };
 
-                // folder ON/OFF semua child
+                // Folder ON/OFF semua isi
                 folderCheckbox.onchange = function(){
                     let checks = childrenDiv.querySelectorAll("input[type=checkbox]");
                     checks.forEach(cb=>{
@@ -198,24 +145,57 @@ async function loadFolder(url, container){
                     });
                 };
 
-                await loadFolder(item.url, childrenDiv);
+                // RECURSIVE dengan path manual (FIXED)
+                await loadFolder(item.path, childrenDiv);
             }
 
-            // ===== FILE =====
+            // ================= FILE =================
             if(item.type === "file" && item.name.endsWith(".geojson")){
-                let fileItem = createFile(item.name, item.download_url);
-                container.appendChild(fileItem);
+
+                let fileDiv = document.createElement("div");
+                fileDiv.className = "file";
+
+                let cb = document.createElement("input");
+                cb.type = "checkbox";
+
+                cb.onchange = function(){
+
+                    if(cb.checked){
+
+                        fetch(item.download_url)
+                        .then(res=>res.json())
+                        .then(data=>{
+
+                            let geo = L.geoJSON(data).addTo(map);
+                            activeLayers[item.path] = geo;
+
+                            if(geo.getBounds().isValid()){
+                                map.fitBounds(geo.getBounds());
+                            }
+                        });
+
+                    } else {
+                        if(activeLayers[item.path]){
+                            map.removeLayer(activeLayers[item.path]);
+                            delete activeLayers[item.path];
+                        }
+                    }
+                };
+
+                fileDiv.appendChild(cb);
+                fileDiv.appendChild(document.createTextNode(" " + item.name));
+                container.appendChild(fileDiv);
             }
         }
 
     } catch(err){
-        container.innerHTML = "Gagal memuat layer.";
+        container.innerHTML = "❌ Gagal memuat layer. Cek repository atau branch.";
         console.error(err);
     }
 }
 
 // ================= RUN =================
-loadFolder(apiURL, document.getElementById("folderList"));
+loadFolder(rootFolder, document.getElementById("folderList"));
 
 </script>
 
