@@ -1,97 +1,62 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-<meta charset="utf-8"/>
+<meta charset="UTF-8">
 <title>WebGIS - GeoSpatialNusantara</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-omnivore/leaflet-omnivore.min.js"></script>
 
 <style>
-html,body{margin:0;height:100%;font-family:Segoe UI;}
-#map{height:100%;width:100%;}
+html, body { margin:0; height:100%; font-family:Segoe UI; }
 
-.sidebar{
-position:absolute;
-right:0;top:0;
-width:330px;height:100%;
-background:#ffffff;
-overflow:auto;
-box-shadow:-4px 0 15px rgba(0,0,0,0.2);
-padding:15px;
-z-index:1000;
+#map {
+    height:100%;
+    width:75%;
+    float:left;
 }
 
-h2{margin-top:0;}
-
-.category{
-font-weight:bold;
-margin-top:12px;
-cursor:pointer;
-padding:6px;
-background:#f1f1f1;
-border-radius:6px;
+#sidebar {
+    width:25%;
+    height:100%;
+    float:left;
+    overflow:auto;
+    background:#ffffff;
+    box-shadow:-3px 0 10px rgba(0,0,0,0.15);
+    padding:15px;
 }
 
-.year{
-margin-left:15px;
-margin-top:6px;
-display:flex;
-align-items:center;
-cursor:pointer;
+h2 { margin-top:0; }
+
+.category {
+    font-weight:bold;
+    margin-top:10px;
+    padding:6px;
+    background:#f1f1f1;
+    border-radius:6px;
+    cursor:pointer;
 }
 
-.toggle{
-width:14px;height:14px;
-border-radius:50%;
-background:#ccc;
-margin-right:8px;
-transition:0.3s;
+.year {
+    margin-left:15px;
+    margin-top:6px;
+    display:flex;
+    align-items:center;
+    cursor:pointer;
 }
 
-.toggle.active{background:#2ecc71;}
-
-.basemap-btn{
-position:absolute;
-top:12px;left:12px;
-background:white;
-padding:8px 10px;
-border-radius:6px;
-cursor:pointer;
-box-shadow:0 2px 6px rgba(0,0,0,0.3);
-z-index:1200;
+.toggle {
+    width:14px;
+    height:14px;
+    border-radius:50%;
+    background:#ccc;
+    margin-right:8px;
+    transition:0.3s;
 }
 
-.basemap-menu{
-position:absolute;
-top:55px;left:12px;
-background:white;
-padding:10px;
-border-radius:6px;
-display:none;
-box-shadow:0 2px 8px rgba(0,0,0,0.3);
-z-index:1200;
-}
-
-.basemap-menu div{
-padding:5px;
-cursor:pointer;
-}
-.basemap-menu div:hover{
-background:#eee;
-}
-
-.loading{
-position:absolute;
-top:50%;left:50%;
-transform:translate(-50%,-50%);
-background:white;
-padding:15px 25px;
-border-radius:8px;
-box-shadow:0 0 15px rgba(0,0,0,0.3);
-z-index:2000;
-display:none;
+.toggle.active {
+    background:#27ae60;
 }
 </style>
 </head>
@@ -100,170 +65,145 @@ display:none;
 
 <div id="map"></div>
 
-<div class="basemap-btn" onclick="toggleBasemap()">☰</div>
-<div class="basemap-menu" id="basemapMenu">
-<div onclick="setBasemap('osm')">OpenStreetMap</div>
-<div onclick="setBasemap('sat')">Satellite</div>
-<div onclick="setBasemap('topo')">Topo</div>
-</div>
-
-<div class="sidebar">
+<div id="sidebar">
 <h2>Layer Control</h2>
 <div id="layerList"></div>
 </div>
 
-<div class="loading" id="loading">Loading Data...</div>
-
 <script>
 
-const username="GeoSpatialNusantara";
-const repo="WebGis";
-const branch="main";
-const rootFolder="file";
+// ==========================
+// KONFIGURASI GITHUB
+// ==========================
 
-var map=L.map('map').setView([-2.5,118],5);
+const username = "GeoSpatialNusantara";
+const repo = "WebGis";
+const branch = "main";
+const rootFolder = "file";
 
-var basemaps={
-osm:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'),
-sat:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'),
-topo:L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png')
-};
+// ==========================
+// INIT MAP
+// ==========================
 
-basemaps.osm.addTo(map);
+var map = L.map('map').setView([-2.5,118],5);
 
-function toggleBasemap(){
-let m=document.getElementById("basemapMenu");
-m.style.display=m.style.display==="block"?"none":"block";
-}
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap'
+}).addTo(map);
 
-function setBasemap(name){
-Object.values(basemaps).forEach(l=>map.removeLayer(l));
-basemaps[name].addTo(map);
-}
+let loadedLayers = {};
 
-let loadedLayers={};
-
-function showLoading(state){
-document.getElementById("loading").style.display=state?"block":"none";
-}
-
-showLoading(true);
+// ==========================
+// FETCH RECURSIVE GITHUB
+// ==========================
 
 fetch(`https://api.github.com/repos/${username}/${repo}/git/trees/${branch}?recursive=1`)
-.then(res=>res.json())
-.then(data=>{
+.then(res => res.json())
+.then(data => {
 
-let files=data.tree.filter(item=>
-item.path.startsWith(rootFolder+"/") &&
-(item.path.endsWith(".kml")||
- item.path.endsWith(".kmz")||
- item.path.endsWith(".zip"))
-);
+    let files = data.tree.filter(item =>
+        item.path.startsWith(rootFolder + "/") &&
+        (item.path.endsWith(".kml") ||
+         item.path.endsWith(".kmz") ||
+         item.path.endsWith(".zip"))
+    );
 
-let structure={};
+    let structure = {};
 
-files.forEach(file=>{
-let parts=file.path.split("/");
-let kategori=parts[1];
-let tahun=parts[2];
+    files.forEach(file => {
+        let parts = file.path.split("/");
+        let kategori = parts[1];
+        let tahun = parts[2];
 
-if(!structure[kategori])structure[kategori]={};
-if(!structure[kategori][tahun])structure[kategori][tahun]=[];
+        if(!structure[kategori]) structure[kategori] = {};
+        if(!structure[kategori][tahun]) structure[kategori][tahun] = [];
 
-structure[kategori][tahun].push(file);
+        structure[kategori][tahun].push(file);
+    });
+
+    buildSidebar(structure);
 });
 
-buildSidebar(structure);
-showLoading(false);
-
-});
-
-function randomColor(){
-return '#'+Math.floor(Math.random()*16777215).toString(16);
-}
+// ==========================
+// BUILD SIDEBAR DINAMIS
+// ==========================
 
 function buildSidebar(structure){
 
-const container=document.getElementById("layerList");
+    const container = document.getElementById("layerList");
 
-Object.keys(structure).forEach(kategori=>{
+    Object.keys(structure).forEach(kategori => {
 
-let catDiv=document.createElement("div");
-catDiv.className="category";
-catDiv.innerHTML="▼ "+kategori;
+        let catDiv = document.createElement("div");
+        catDiv.className = "category";
+        catDiv.innerHTML = "▼ " + kategori;
 
-let yearContainer=document.createElement("div");
-yearContainer.style.display="none";
+        let yearContainer = document.createElement("div");
+        yearContainer.style.display = "none";
 
-catDiv.onclick=()=>{
-yearContainer.style.display=
-yearContainer.style.display==="none"?"block":"none";
-};
+        catDiv.onclick = () => {
+            yearContainer.style.display =
+                yearContainer.style.display === "none" ? "block" : "none";
+        };
 
-container.appendChild(catDiv);
-container.appendChild(yearContainer);
+        container.appendChild(catDiv);
+        container.appendChild(yearContainer);
 
-Object.keys(structure[kategori]).forEach(tahun=>{
+        Object.keys(structure[kategori]).forEach(tahun => {
 
-let yearDiv=document.createElement("div");
-yearDiv.className="year";
+            let yearDiv = document.createElement("div");
+            yearDiv.className = "year";
 
-let toggle=document.createElement("span");
-toggle.className="toggle";
+            let toggle = document.createElement("span");
+            toggle.className = "toggle";
 
-let label=document.createElement("span");
-label.innerText=tahun;
+            let label = document.createElement("span");
+            label.innerText = tahun;
 
-yearDiv.appendChild(toggle);
-yearDiv.appendChild(label);
-yearContainer.appendChild(yearDiv);
+            yearDiv.appendChild(toggle);
+            yearDiv.appendChild(label);
+            yearContainer.appendChild(yearDiv);
 
-toggle.onclick=()=>{
+            toggle.onclick = () => {
 
-if(toggle.classList.contains("active")){
-toggle.classList.remove("active");
-if(loadedLayers[kategori+tahun])
-map.removeLayer(loadedLayers[kategori+tahun]);
-}
-else{
-toggle.classList.add("active");
+                if(toggle.classList.contains("active")){
+                    toggle.classList.remove("active");
+                    if(loadedLayers[kategori+tahun])
+                        map.removeLayer(loadedLayers[kategori+tahun]);
+                } 
+                else {
 
-let group=L.layerGroup();
-let color=randomColor();
+                    toggle.classList.add("active");
 
-structure[kategori][tahun].forEach(file=>{
+                    let group = L.layerGroup();
 
-let rawUrl=
-`https://raw.githubusercontent.com/${username}/${repo}/${branch}/${file.path}`;
+                    structure[kategori][tahun].forEach(file => {
 
-let layer=omnivore.kml(rawUrl);
+                        let rawUrl =
+                        `https://raw.githubusercontent.com/${username}/${repo}/${branch}/${file.path}`;
 
-layer.on('ready',function(){
-map.fitBounds(layer.getBounds());
-});
+                        let layer = omnivore.kml(rawUrl)
+                        .on('ready', function(){
+                            map.fitBounds(layer.getBounds());
+                        });
 
-layer.eachLayer(function(l){
-l.setStyle&&l.setStyle({color:color});
-let cleanName=file.path.split("/").pop()
-.replace(".zip","")
-.replace(".kml","")
-.replace(".kmz","");
-l.bindTooltip(cleanName);
-});
+                        layer.eachLayer(function(l){
+                            let cleanName = file.path.split("/").pop()
+                            .replace(".zip","")
+                            .replace(".kml","")
+                            .replace(".kmz","");
+                            l.bindTooltip(cleanName);
+                        });
 
-layer.addTo(group);
+                        layer.addTo(group);
+                    });
 
-});
-
-group.addTo(map);
-loadedLayers[kategori+tahun]=group;
-}
-};
-
-});
-
-});
-
+                    group.addTo(map);
+                    loadedLayers[kategori+tahun] = group;
+                }
+            };
+        });
+    });
 }
 
 </script>
