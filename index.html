@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>WebGIS with Leaflet (GitHub Repo)</title>
+<title>WebGIS - GitHub Layer Loader</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -14,7 +14,7 @@
 body { margin:0; display:flex; font-family:Arial; }
 
 #sidebar{
-    width:300px;
+    width:320px;
     background:#f4f4f4;
     padding:10px;
     height:100vh;
@@ -22,19 +22,22 @@ body { margin:0; display:flex; font-family:Arial; }
     border-right:1px solid #ccc;
 }
 
-#map{ flex:1; height:100vh; }
+#map{
+    flex:1;
+    height:100vh;
+}
 
-.checkbox-item {
-    margin-left:15px;
+.layer-item{
     margin-top:5px;
 }
+
 </style>
 </head>
 
 <body>
 
 <div id="sidebar">
-    <h3>Layers from GitHub</h3>
+    <h3>Layer Repository</h3>
     <div id="folderList"></div>
 </div>
 
@@ -42,141 +45,157 @@ body { margin:0; display:flex; font-family:Arial; }
 
 <script>
 
-// ===============================
-// 1️⃣ SET UP MAP (LEAFLET)
-// ===============================
-var map = L.map("map").setView([-2.5, 117.5], 5);
+// ======================================
+// 1️⃣ MAP SETUP
+// ======================================
+var map = L.map("map").setView([-2.5,117.5],5);
 
-// ===============================
-// 2️⃣ BASEMAPS (OSM & SATELLITE)
-// ===============================
+// Basemap OSM
 var osm = L.tileLayer(
     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     { attribution:"© OpenStreetMap" }
 ).addTo(map);
 
+// Basemap Satellite
 var satellite = L.tileLayer(
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     { attribution:"Tiles © Esri" }
 );
 
+// Layer switcher
 L.control.layers({
     "OpenStreetMap": osm,
     "Satellite": satellite
 }).addTo(map);
 
-// ===============================
-// 3️⃣ SEARCH (GEOCODER)
-// ===============================
+// ======================================
+// 2️⃣ SEARCH CONTROL
+// ======================================
 L.Control.geocoder({
     defaultMarkGeocode:true
 }).addTo(map);
 
-// ===============================
-// 4️⃣ LOAD SUBFOLDER LAYERS DARI GITHUB
-// ===============================
-
+// ======================================
+// 3️⃣ GITHUB CONFIG
+// ======================================
 const owner = "GeoSpatialNusantara";
 const repo = "WebGis";
 const branch = "main";
-const rootPath = "file";
+const rootFolder = "file";
 
-const githubAPI = `https://api.github.com/repos/${owner}/${repo}/contents/${rootPath}?ref=${branch}`;
+const apiURL = `https://api.github.com/repos/${owner}/${repo}/contents/${rootFolder}?ref=${branch}`;
 
 let activeLayers = {};
 
-// buat checkbox untuk file GEOJSON
-function createGeoJSONCheckbox(name, url, indent=0){
+// ======================================
+// 4️⃣ CREATE CHECKBOX
+// ======================================
+function createCheckbox(name, indent=0){
 
     let wrapper = document.createElement("div");
-    wrapper.className = "checkbox-item";
-    wrapper.style.marginLeft = (indent * 15) + "px";
+    wrapper.className = "layer-item";
+    wrapper.style.marginLeft = (indent*15) + "px";
 
-    let cb = document.createElement("input");
-    cb.type = "checkbox";
+    let checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
 
-    cb.onchange = function(){
-
-        if(cb.checked){
-
-            fetch(url)
-            .then(res=>res.json())
-            .then(data=>{
-
-                let geo = L.geoJSON(data,{
-                    onEachFeature:function(feature, layer){
-                        if(feature.properties){
-                            layer.bindPopup(
-                                Object.entries(feature.properties)
-                                .map(([k,v]) => k+": "+v)
-                                .join("<br>")
-                            );
-                        }
-                    }
-                }).addTo(map);
-
-                activeLayers[name] = geo;
-
-                if(geo.getBounds().isValid()){
-                    map.fitBounds(geo.getBounds());
-                }
-
-            });
-
-        } else {
-
-            if(activeLayers[name]){
-                map.removeLayer(activeLayers[name]);
-                delete activeLayers[name];
-            }
-
-        }
-
-    };
-
-    wrapper.appendChild(cb);
+    wrapper.appendChild(checkbox);
     wrapper.appendChild(document.createTextNode(" " + name));
-    return wrapper;
+
+    return {wrapper, checkbox};
 }
 
-
-// recursive loader folder
-async function loadFolders(path, container, indent=0){
+// ======================================
+// 5️⃣ LOAD FOLDER RECURSIVE
+// ======================================
+async function loadFolder(path, container, indent=0){
 
     const response = await fetch(path);
     const items = await response.json();
 
     for(const item of items){
 
+        // ==========================
+        // FOLDER (WITH CHECKBOX)
+        // ==========================
         if(item.type === "dir"){
 
-            // buat header folder tanpa checkbox
-            let folderDiv = document.createElement("div");
-            folderDiv.style.fontWeight="bold";
-            folderDiv.style.marginLeft=(indent*15)+"px";
-            folderDiv.textContent = item.name;
-            container.appendChild(folderDiv);
+            let {wrapper, checkbox} = createCheckbox(item.name, indent);
+            container.appendChild(wrapper);
 
-            let subCont = document.createElement("div");
-            container.appendChild(subCont);
+            let subContainer = document.createElement("div");
+            container.appendChild(subContainer);
 
-            // recursive
-            await loadFolders(item.url, subCont, indent+1);
+            checkbox.onchange = function(){
+
+                let childCheckboxes = subContainer.querySelectorAll("input[type=checkbox]");
+
+                childCheckboxes.forEach(child=>{
+                    child.checked = checkbox.checked;
+                    child.dispatchEvent(new Event("change"));
+                });
+
+            };
+
+            await loadFolder(item.url, subContainer, indent+1);
         }
 
+        // ==========================
+        // FILE GEOJSON
+        // ==========================
         if(item.type === "file" && item.name.endsWith(".geojson")){
 
-            let rawURL = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${rootPath}/${item.path.replace(rootPath+"/","")}`;
+            let rawURL = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${item.path}`;
 
-            let cb = createGeoJSONCheckbox(item.name, rawURL, indent);
-            container.appendChild(cb);
+            let {wrapper, checkbox} = createCheckbox(item.name, indent);
+            container.appendChild(wrapper);
 
+            checkbox.onchange = function(){
+
+                if(checkbox.checked){
+
+                    fetch(rawURL)
+                    .then(res=>res.json())
+                    .then(data=>{
+
+                        let geo = L.geoJSON(data,{
+                            onEachFeature:function(feature, layer){
+                                if(feature.properties){
+                                    layer.bindPopup(
+                                        Object.entries(feature.properties)
+                                        .map(([k,v]) => k + ": " + v)
+                                        .join("<br>")
+                                    );
+                                }
+                            }
+                        }).addTo(map);
+
+                        activeLayers[item.path] = geo;
+
+                        if(geo.getBounds().isValid()){
+                            map.fitBounds(geo.getBounds());
+                        }
+
+                    });
+
+                } else {
+
+                    if(activeLayers[item.path]){
+                        map.removeLayer(activeLayers[item.path]);
+                        delete activeLayers[item.path];
+                    }
+
+                }
+
+            };
         }
     }
 }
 
-// run loader
-loadFolders(githubAPI, document.getElementById("folderList"));
+// ======================================
+// 6️⃣ RUN LOADER
+// ======================================
+loadFolder(apiURL, document.getElementById("folderList"));
 
 </script>
 
