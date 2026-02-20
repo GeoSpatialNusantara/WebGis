@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>WebGIS SHP GitHub</title>
+<title>WebGIS SHP - GeoSpatialNusantara</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
@@ -17,12 +17,11 @@ body{
     width:100%;
 }
 
-/* ===== Sidebar ===== */
 #sidebar{
     position:absolute;
     top:0;
     right:0;
-    width:320px;
+    width:350px;
     height:100vh;
     background:#f4f4f4;
     border-left:1px solid #ccc;
@@ -52,10 +51,23 @@ body{
     box-shadow:0 2px 6px rgba(0,0,0,0.2);
 }
 
+.category{
+    margin-top:15px;
+    font-weight:bold;
+}
+
+.year{
+    margin-left:10px;
+    margin-top:8px;
+    font-weight:bold;
+    color:#444;
+}
+
 .file-item{
-    margin-bottom:15px;
-    padding:10px;
+    margin-left:20px;
+    margin-top:6px;
     background:white;
+    padding:8px;
     border-radius:6px;
     box-shadow:0 1px 4px rgba(0,0,0,0.1);
 }
@@ -63,7 +75,7 @@ body{
 .file-item button{
     margin-top:5px;
     margin-right:5px;
-    padding:6px 10px;
+    padding:5px 8px;
     cursor:pointer;
     border:none;
     border-radius:4px;
@@ -71,10 +83,8 @@ body{
     color:white;
 }
 
-/* ===== Tooltip ===== */
 .leaflet-tooltip{
     background:white;
-    color:#333;
     border-radius:6px;
     padding:4px 8px;
     font-weight:bold;
@@ -89,8 +99,8 @@ body{
 <button id="toggleBtn">☰</button>
 
 <div id="sidebar">
-    <h2>Daftar File SHP</h2>
-    <div id="loading">Memuat file...</div>
+    <h2>Data SHP</h2>
+    <div id="loading">Memuat struktur folder...</div>
     <div id="fileList"></div>
 </div>
 
@@ -99,10 +109,10 @@ body{
 
 <script>
 
-// ===== CONFIG =====
+// ===== CONFIG BARU =====
 const OWNER = "GeoSpatialNusantara";
 const REPO = "WebGis";
-const FOLDER = "file";
+const ROOT_FOLDER = "shp";   // ubah jika beda
 const BRANCH = "main";
 const markerImage = "./img/point-of-interest.png";
 
@@ -110,36 +120,20 @@ let layerStore = {};
 let centerMarkers = {};
 let globalBounds = null;
 
-// ===== MAP INIT =====
-const map = L.map('map',{
-    minZoom:5,
-    maxZoom:18
-}).setView([-2.5,118],5);
+// ===== MAP =====
+const map = L.map('map',{minZoom:5,maxZoom:18})
+.setView([-2.5,118],5);
 
 L.tileLayer(
 'https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-{
-    subdomains:['mt0','mt1','mt2','mt3'],
-    maxZoom:18
-}).addTo(map);
+{ subdomains:['mt0','mt1','mt2','mt3'] }
+).addTo(map);
 
-// ===== SIDEBAR TOGGLE =====
 document.getElementById("toggleBtn")
 .addEventListener("click",()=>{
     document.getElementById("sidebar")
     .classList.toggle("active");
 });
-
-// ===== UTIL =====
-function stringToColor(str){
-    let hash=0;
-    for(let i=0;i<str.length;i++){
-        hash=str.charCodeAt(i)+((hash<<5)-hash);
-    }
-    let color=(hash & 0x00FFFFFF)
-    .toString(16).toUpperCase();
-    return "#"+"000000".substring(0,6-color.length)+color;
-}
 
 function createIcon(size){
     return L.icon({
@@ -149,132 +143,115 @@ function createIcon(size){
     });
 }
 
-// ===== LOAD FILES =====
+async function fetchGitHub(path){
+    const url=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`;
+    const res=await fetch(url);
+    return await res.json();
+}
+
+// ===== LOAD STRUKTUR BARU =====
 async function loadFiles(){
 
-    const fileListDiv=document.getElementById("fileList");
-    const loadingDiv=document.getElementById("loading");
+    const container=document.getElementById("fileList");
 
     try{
 
-        const apiUrl=
-        `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FOLDER}?ref=${BRANCH}`;
+        const categories = await fetchGitHub(ROOT_FOLDER);
 
-        const response=await fetch(apiUrl);
-        const files=await response.json();
-        const shpFiles=files.filter(f=>f.name.endsWith(".zip"));
+        for(const cat of categories){
 
-        for(const file of shpFiles){
+            if(cat.type!=="dir") continue;
 
-            const name=file.name;
-            const displayName=name.replace(".zip","");
-            const url=file.download_url;
-            const color=stringToColor(name);
+            const catDiv=document.createElement("div");
+            catDiv.className="category";
+            catDiv.textContent=cat.name;
+            container.appendChild(catDiv);
 
-            // Sidebar item
-            const div=document.createElement("div");
-            div.className="file-item";
-            div.innerHTML=`
-                <b>${displayName}</b><br>
-                <button onclick="viewLayer('${name}')">View</button>
-                <button onclick="window.open('${url}','_blank')">Download</button>
-            `;
-            fileListDiv.appendChild(div);
+            const years = await fetchGitHub(cat.path);
 
-            // Load SHP
-            const res=await fetch(url);
-            const arrayBuffer=await res.arrayBuffer();
-            const data=await shp(arrayBuffer);
+            for(const year of years){
 
-            const layer=L.geoJSON(data,{
-                style:{
-                    color:color,
-                    weight:2,
-                    fillOpacity:0.4
+                if(year.type!=="dir") continue;
+
+                const yearDiv=document.createElement("div");
+                yearDiv.className="year";
+                yearDiv.textContent=year.name;
+                container.appendChild(yearDiv);
+
+                const files = await fetchGitHub(year.path);
+
+                for(const file of files){
+
+                    if(!file.name.endsWith(".zip")) continue;
+
+                    const displayName=file.name.replace(".zip","");
+                    const url=file.download_url;
+
+                    const div=document.createElement("div");
+                    div.className="file-item";
+                    div.innerHTML=`
+                        ${displayName}<br>
+                        <button onclick="viewLayer('${file.path}')">View</button>
+                        <button onclick="window.open('${url}','_blank')">Download</button>
+                    `;
+                    container.appendChild(div);
+
+                    await loadLayer(file.path,url,displayName);
                 }
-            }).addTo(map);
-
-            layerStore[name]=layer;
-
-            if(!globalBounds){
-                globalBounds=layer.getBounds();
-            }else{
-                globalBounds.extend(layer.getBounds());
             }
-
-            // Marker tengah layer
-            const center=layer.getBounds().getCenter();
-            const size=Math.max(40,map.getZoom()*2);
-
-            const marker=L.marker(center,{
-                icon:createIcon(size)
-            }).addTo(map);
-
-            // Tooltip hover
-            marker.bindTooltip(displayName,{
-                direction:"top",
-                offset:[0,-size],
-                opacity:0.9
-            });
-
-            marker.on("mouseover",()=>{
-                const newSize = Math.max(40,map.getZoom()*2)*1.5;
-                marker.setIcon(createIcon(newSize));
-                marker.openTooltip();
-            });
-
-            marker.on("mouseout",()=>{
-                const normalSize = Math.max(40,map.getZoom()*2);
-                marker.setIcon(createIcon(normalSize));
-                marker.closeTooltip();
-            });
-
-            marker.on("click",()=>{
-                map.fitBounds(layer.getBounds());
-            });
-
-            centerMarkers[name]=marker;
-        }
-
-        // Batasi zoom out saja
-        if(globalBounds){
-            const padded = globalBounds.pad(0.05);
-            map.fitBounds(padded);
-            map.setMinZoom(map.getZoom());
         }
 
     }catch(err){
         console.error(err);
-    }finally{
-        loadingDiv.style.display="none";
     }
+
+    document.getElementById("loading").style.display="none";
 }
 
-// ===== VIEW BUTTON =====
-function viewLayer(name){
+async function loadLayer(key,url,name){
 
-    if(layerStore[name]){
-        map.fitBounds(layerStore[name].getBounds());
+    const res=await fetch(url);
+    const arrayBuffer=await res.arrayBuffer();
+    const data=await shp(arrayBuffer);
 
-        const marker=centerMarkers[name];
-        const size=Math.max(40,map.getZoom()*2)*1.6;
+    const layer=L.geoJSON(data).addTo(map);
+    layerStore[key]=layer;
 
-        marker.setIcon(createIcon(size));
-
-        setTimeout(()=>{
-            marker.setIcon(createIcon(Math.max(40,map.getZoom()*2)));
-        },600);
+    if(!globalBounds){
+        globalBounds=layer.getBounds();
+    }else{
+        globalBounds.extend(layer.getBounds());
     }
-}
 
-// ===== UPDATE MARKER SAAT ZOOM =====
-map.on("zoomend",()=>{
+    const center=layer.getBounds().getCenter();
     const size=Math.max(40,map.getZoom()*2);
 
-    for(let key in centerMarkers){
-        centerMarkers[key].setIcon(createIcon(size));
+    const marker=L.marker(center,{icon:createIcon(size)}).addTo(map);
+
+    marker.bindTooltip(name,{direction:"top"});
+
+    marker.on("mouseover",()=>{
+        marker.setIcon(createIcon(size*1.5));
+        marker.openTooltip();
+    });
+
+    marker.on("mouseout",()=>{
+        marker.setIcon(createIcon(size));
+        marker.closeTooltip();
+    });
+
+    marker.on("click",()=>{
+        map.fitBounds(layer.getBounds());
+    });
+
+    centerMarkers[key]=marker;
+}
+
+function viewLayer(key){
+    if(layerStore[key]){
+        map.fitBounds(layerStore[key].getBounds());
     }
-});
+}
 
 loadFiles();
 
