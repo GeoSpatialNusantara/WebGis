@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>WebGIS - GitHub Loader</title>
+<title>WebGIS - GitHub Layer Loader</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -27,7 +27,7 @@ body { margin:0; display:flex; font-family:Arial; }
     height:100vh;
 }
 
-.layer-item{
+.checkbox-item{
     margin-top:5px;
 }
 </style>
@@ -36,7 +36,7 @@ body { margin:0; display:flex; font-family:Arial; }
 <body>
 
 <div id="sidebar">
-    <h3>Layer Repository</h3>
+    <h3>Layers from GitHub</h3>
     <div id="folderList"></div>
 </div>
 
@@ -65,9 +65,11 @@ L.control.layers({
 }).addTo(map);
 
 // ======================================
-// 2️⃣ SEARCH
+// 2️⃣ SEARCH CONTROL
 // ======================================
-L.Control.geocoder({defaultMarkGeocode:true}).addTo(map);
+L.Control.geocoder({
+    defaultMarkGeocode:true
+}).addTo(map);
 
 // ======================================
 // 3️⃣ GITHUB CONFIG
@@ -82,24 +84,62 @@ const apiURL = `https://api.github.com/repos/${owner}/${repo}/contents/${rootFol
 let activeLayers = {};
 
 // ======================================
-// 4️⃣ CREATE CHECKBOX
+// 4️⃣ CREATE GEOJSON CHECKBOX
 // ======================================
-function createCheckbox(name, indent=0){
+function createGeoJSONCheckbox(name, url, indent=0){
 
     let wrapper = document.createElement("div");
-    wrapper.className = "layer-item";
-    wrapper.style.marginLeft = (indent*15) + "px";
+    wrapper.className = "checkbox-item";
+    wrapper.style.marginLeft = (indent * 15) + "px";
 
-    let checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
+    let cb = document.createElement("input");
+    cb.type = "checkbox";
 
-    wrapper.appendChild(checkbox);
+    cb.onchange = function(){
+
+        if(cb.checked){
+
+            fetch(url)
+            .then(res=>res.json())
+            .then(data=>{
+
+                let geo = L.geoJSON(data,{
+                    onEachFeature:function(feature, layer){
+                        if(feature.properties){
+                            layer.bindPopup(
+                                Object.entries(feature.properties)
+                                .map(([k,v]) => k+": "+v)
+                                .join("<br>")
+                            );
+                        }
+                    }
+                }).addTo(map);
+
+                activeLayers[name] = geo;
+
+                if(geo.getBounds().isValid()){
+                    map.fitBounds(geo.getBounds());
+                }
+
+            });
+
+        } else {
+
+            if(activeLayers[name]){
+                map.removeLayer(activeLayers[name]);
+                delete activeLayers[name];
+            }
+        }
+    };
+
+    wrapper.appendChild(cb);
     wrapper.appendChild(document.createTextNode(" " + name));
-
-    return {wrapper, checkbox};
+    return wrapper;
 }
 
-// recursive loader folder (WITH CHECKBOX FOLDER)
+// ======================================
+// 5️⃣ LOAD FOLDER (RECURSIVE + FOLDER CHECKBOX)
+// ======================================
 async function loadFolders(path, container, indent=0){
 
     const response = await fetch(path);
@@ -108,7 +148,7 @@ async function loadFolders(path, container, indent=0){
     for(const item of items){
 
         // =========================
-        // FOLDER (PAKAI CHECKBOX)
+        // FOLDER WITH CHECKBOX
         // =========================
         if(item.type === "dir"){
 
@@ -123,22 +163,21 @@ async function loadFolders(path, container, indent=0){
             wrapper.appendChild(document.createTextNode(" " + item.name));
             container.appendChild(wrapper);
 
-            let subCont = document.createElement("div");
-            container.appendChild(subCont);
+            let subContainer = document.createElement("div");
+            container.appendChild(subContainer);
 
-            // Jika folder dicentang → semua child ikut
+            // ON/OFF semua child
             folderCheckbox.onchange = function(){
 
-                let childCheckboxes = subCont.querySelectorAll("input[type=checkbox]");
+                let childCheckboxes = subContainer.querySelectorAll("input[type=checkbox]");
 
                 childCheckboxes.forEach(cb=>{
                     cb.checked = folderCheckbox.checked;
                     cb.dispatchEvent(new Event("change"));
                 });
-
             };
 
-            await loadFolders(item.url, subCont, indent+1);
+            await loadFolders(item.url, subContainer, indent+1);
         }
 
         // =========================
@@ -146,7 +185,6 @@ async function loadFolders(path, container, indent=0){
         // =========================
         if(item.type === "file" && item.name.endsWith(".geojson")){
 
-            // 🔥 Gunakan download_url agar pasti benar
             let rawURL = item.download_url;
 
             let cb = createGeoJSONCheckbox(item.name, rawURL, indent);
@@ -155,9 +193,10 @@ async function loadFolders(path, container, indent=0){
     }
 }
 
-        
-// RUN
-loadFolder(apiURL, document.getElementById("folderList"));
+// ======================================
+// 6️⃣ RUN LOADER
+// ======================================
+loadFolders(apiURL, document.getElementById("folderList"));
 
 </script>
 
