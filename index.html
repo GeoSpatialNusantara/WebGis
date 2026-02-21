@@ -3,106 +3,58 @@
 <head>
 <meta charset="UTF-8">
 <title>WebGIS - GeoSpatialNusantara</title>
-
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-body{margin:0;font-family:Arial,sans-serif;overflow:hidden;}
+body{margin:0;font-family:Arial;}
 #map{height:100vh;width:100%;}
 
 /* Sidebar */
 #sidebar{
 position:absolute;right:0;top:0;
-width:360px;height:100vh;
-background:#f8f9fa;
+width:350px;height:100%;
+background:#f4f4f4;
 box-shadow:-3px 0 8px rgba(0,0,0,0.2);
-padding:0;overflow:hidden;
 transform:translateX(100%);
-transition:0.3s;z-index:1000;
+transition:.3s;
+z-index:1000;
+overflow:hidden;
 }
 #sidebar.active{transform:translateX(0);}
-
 #toggleBtn{
 position:absolute;top:15px;right:15px;
 z-index:1200;padding:8px 12px;
 border:none;border-radius:6px;
 cursor:pointer;background:white;
-box-shadow:0 2px 6px rgba(0,0,0,0.2);
+box-shadow:0 2px 6px rgba(0,0,0,.2);
 }
 
 /* Tabs */
-.tabs{
-display:flex;
-background:#e9ecef;
-}
-.tab{
-flex:1;
-padding:10px;
-text-align:center;
-cursor:pointer;
-font-weight:bold;
-}
-.tab.active{
-background:white;
-border-bottom:3px solid #2c7be5;
-}
-
-.tab-content{
-padding:15px;
-height:calc(100vh - 50px);
-overflow:auto;
-display:none;
-}
+.tabs{display:flex;background:#e0e0e0;}
+.tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-weight:bold;}
+.tab.active{background:white;border-bottom:3px solid #2c7be5;}
+.tab-content{display:none;padding:15px;height:calc(100% - 45px);overflow:auto;}
 .tab-content.active{display:block;}
 
-/* Expand Arrow */
-.arrow{
-margin-right:6px;
-transition:0.3s;
-}
+.row{display:flex;align-items:center;margin-top:8px;}
+.arrow{margin-right:6px;cursor:pointer;transition:.3s;}
 .arrow.rotate{transform:rotate(90deg);}
-
-/* Row */
-.row{
-display:flex;
-align-items:center;
-margin-top:8px;
-cursor:pointer;
-}
-
-/* Toggle */
 .toggle{
-width:16px;height:16px;
-border-radius:50%;
-background:#ccc;
-margin-right:8px;
-cursor:pointer;
-transition:0.2s;
+width:15px;height:15px;border-radius:50%;
+background:#bbb;margin-right:8px;cursor:pointer;
 }
-.toggle.active{
-background:#2c7be5;
-}
+.toggle.active{background:#2c7be5;}
 
-/* Year container */
-.year-container{
-display:none;
-margin-left:15px;
-}
-
-input[type="text"]{
-width:100%;padding:8px;
-margin-bottom:10px;
-border-radius:6px;
-border:1px solid #ccc;
-}
+.year-container{display:none;margin-left:15px;}
+input{width:100%;padding:8px;margin-bottom:10px;border-radius:6px;border:1px solid #ccc;}
 
 #loading{
 position:absolute;top:50%;left:50%;
 transform:translate(-50%,-50%);
 background:white;padding:15px 25px;
 border-radius:8px;
-box-shadow:0 4px 10px rgba(0,0,0,0.2);
-z-index:2000;font-weight:bold;
+box-shadow:0 4px 10px rgba(0,0,0,.2);
+z-index:2000;
 }
 </style>
 </head>
@@ -121,22 +73,18 @@ z-index:2000;font-weight:bold;
 <div class="tab" data-tab="uploadTab">Upload</div>
 </div>
 
-<!-- Basemap -->
 <div id="basemapTab" class="tab-content active">
-<div class="row" onclick="setBasemap('osm')">OpenStreetMap</div>
-<div class="row" onclick="setBasemap('esri')">ESRI Satellite</div>
+<div class="row" onclick="switchBasemap('osm')">OpenStreetMap</div>
+<div class="row" onclick="switchBasemap('esri')">ESRI Satellite</div>
 </div>
 
-<!-- Layer -->
 <div id="layerTab" class="tab-content">
 <input type="text" id="searchInput" placeholder="Cari layer...">
 <div id="layerList"></div>
 </div>
 
-<!-- Upload -->
 <div id="uploadTab" class="tab-content">
-<input type="file" id="uploadInput" multiple
-accept=".zip,.kml,.kmz">
+<input type="file" id="uploadInput" multiple accept=".zip,.kml,.kmz">
 </div>
 
 </div>
@@ -153,55 +101,49 @@ const BRANCH="main";
 const ROOT_FOLDER="file";
 const markerImage="./img/point-of-interest.png";
 
-// MAP
 const map=L.map('map').setView([-2.5,118],5);
 
-// Basemap
-const osm=L.tileLayer(
-'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+// Basemap (tidak pernah dihapus)
+const basemapLayer=L.layerGroup().addTo(map);
 
+const osm=L.tileLayer(
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+);
 const esri=L.tileLayer(
 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
 );
 
-osm.addTo(map);
+osm.addTo(basemapLayer);
 
-function setBasemap(type){
-map.eachLayer(l=>map.removeLayer(l));
-if(type==="osm") osm.addTo(map);
-else esri.addTo(map);
+function switchBasemap(type){
+basemapLayer.clearLayers();
+if(type==="osm") osm.addTo(basemapLayer);
+else esri.addTo(basemapLayer);
 }
 
-// Sidebar toggle
-document.getElementById("toggleBtn")
-.onclick=()=>document.getElementById("sidebar")
-.classList.toggle("active");
+// Sidebar
+toggleBtn.onclick=()=>sidebar.classList.toggle("active");
 
 // Tabs
 document.querySelectorAll(".tab").forEach(tab=>{
 tab.onclick=function(){
 document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-document.querySelectorAll(".tab-content")
-.forEach(c=>c.classList.remove("active"));
+document.querySelectorAll(".tab-content").forEach(c=>c.classList.remove("active"));
 tab.classList.add("active");
-document.getElementById(tab.dataset.tab)
-.classList.add("active");
+document.getElementById(tab.dataset.tab).classList.add("active");
 };
 });
 
 let layerStore={},markerStore={};
 
-// Fetch GitHub
 async function fetchGitHub(path){
 const url=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`;
 const res=await fetch(url);
 return await res.json();
 }
 
-// Load Structure
 async function loadStructure(){
 const container=document.getElementById("layerList");
-container.innerHTML="";
 const categories=await fetchGitHub(ROOT_FOLDER);
 
 for(const cat of categories){
@@ -220,30 +162,25 @@ toggle.className="toggle";
 const label=document.createElement("span");
 label.innerText=cat.name;
 
-row.appendChild(arrow);
-row.appendChild(toggle);
-row.appendChild(label);
+row.append(arrow,toggle,label);
 container.appendChild(row);
 
 const yearContainer=document.createElement("div");
 yearContainer.className="year-container";
 container.appendChild(yearContainer);
 
-// Expand
 arrow.onclick=()=>{
 yearContainer.style.display=
 yearContainer.style.display==="block"?"none":"block";
 arrow.classList.toggle("rotate");
 };
 
-// Years
 const years=await fetchGitHub(cat.path);
 for(const year of years){
 if(year.type!=="dir") continue;
 
 const yRow=document.createElement("div");
 yRow.className="row";
-yRow.style.marginLeft="15px";
 
 const yToggle=document.createElement("div");
 yToggle.className="toggle";
@@ -251,112 +188,82 @@ yToggle.className="toggle";
 const yLabel=document.createElement("span");
 yLabel.innerText=year.name;
 
-yRow.appendChild(yToggle);
-yRow.appendChild(yLabel);
+yRow.append(yToggle,yLabel);
 yearContainer.appendChild(yRow);
 
 const files=await fetchGitHub(year.path);
 for(const file of files){
 if(!file.name.match(/\.(zip|kml|kmz)$/i)) continue;
-await loadLayer(
-file.path,
-file.download_url,
-file.name.replace(/\.(zip|kml|kmz)$/i,"")
-);
+layerStore[file.path]={url:file.download_url,name:file.name};
 }
 
-// Toggle year
-yToggle.onclick=()=>{
-yToggle.classList.toggle("active");
-const active=yToggle.classList.contains("active");
-let bounds=[];
-for(let key in layerStore){
-if(key.startsWith(year.path)){
-if(active){
-map.addLayer(layerStore[key]);
-map.addLayer(markerStore[key]);
-bounds.push(layerStore[key]);
-}else{
-map.removeLayer(layerStore[key]);
-map.removeLayer(markerStore[key]);
-}
-}
-}
-if(active && bounds.length)
-map.fitBounds(L.featureGroup(bounds).getBounds());
-};
+yToggle.onclick=()=>toggleYear(year.path,yToggle);
 }
 
-// Toggle category → otomatis semua tahun
 toggle.onclick=()=>{
 toggle.classList.toggle("active");
-const active=toggle.classList.contains("active");
-yearContainer.querySelectorAll(".toggle")
-.forEach(t=>{
-if(active)t.classList.add("active");
+yearContainer.querySelectorAll(".toggle").forEach(t=>{
+if(toggle.classList.contains("active")) t.classList.add("active");
 else t.classList.remove("active");
-t.onclick();
+t.click();
 });
 };
 }
 
-document.getElementById("loading").style.display="none";
+loading.style.display="none";
 }
 
-// Load Layer (default OFF)
-async function loadLayer(key,url,name){
-let layer;
+async function toggleYear(path,btn){
+btn.classList.toggle("active");
+const active=btn.classList.contains("active");
 
-if(url.endsWith(".zip")){
-const res=await fetch(url);
+for(let key in layerStore){
+if(key.startsWith(path)){
+if(active){
+await loadLayer(key);
+}else{
+if(layerStore[key].layer){
+map.removeLayer(layerStore[key].layer);
+map.removeLayer(layerStore[key].marker);
+}
+}
+}
+}
+}
+
+async function loadLayer(key){
+if(layerStore[key].layer){
+map.addLayer(layerStore[key].layer);
+map.addLayer(layerStore[key].marker);
+map.fitBounds(layerStore[key].layer.getBounds());
+return;
+}
+
+let layer;
+if(layerStore[key].url.endsWith(".zip")){
+const res=await fetch(layerStore[key].url);
 const buffer=await res.arrayBuffer();
 const data=await shp(buffer);
-layer=L.geoJSON(data);
+layer=L.geoJSON(data).addTo(map);
 }
 else{
-layer=omnivore.kml(url);
+layer=omnivore.kml(layerStore[key].url).addTo(map);
 }
 
-layerStore[key]=layer;
-
-// Waypoint marker
 layer.on("ready",()=>{
 const center=layer.getBounds().getCenter();
 const icon=L.icon({
 iconUrl:markerImage,
-iconSize:[35,35],
-iconAnchor:[17,35]
+iconSize:[30,30],
+iconAnchor:[15,30]
 });
-const marker=L.marker(center,{icon})
-.bindTooltip(name);
-markerStore[key]=marker;
-});
-}
-
-// Search
-document.getElementById("searchInput")
-.addEventListener("keyup",function(){
-const keyword=this.value.toLowerCase();
-document.querySelectorAll(".row")
-.forEach(r=>{
-r.style.display=r.innerText.toLowerCase()
-.includes(keyword)?"flex":"none";
-});
-});
-
-// Upload Temporary
-document.getElementById("uploadInput")
-.addEventListener("change",async function(e){
-for(const file of e.target.files){
-const name=file.name;
-if(file.name.endsWith(".zip")){
-const buffer=await file.arrayBuffer();
-const data=await shp(buffer);
-const layer=L.geoJSON(data).addTo(map);
+const marker=L.marker(center,{icon}).addTo(map);
+layerStore[key].marker=marker;
 map.fitBounds(layer.getBounds());
-}
-}
 });
+
+layerStore[key].layer=layer;
+}
 
 loadStructure();
 </script>
