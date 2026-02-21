@@ -7,72 +7,81 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-body{margin:0;font-family:Arial, sans-serif;overflow:hidden;}
+body{margin:0;font-family:Arial,sans-serif;overflow:hidden;}
 #map{height:100vh;width:100%;}
 
 /* Sidebar */
 #sidebar{
-    position:absolute;
-    top:0;
-    right:0;
-    width:360px;
-    height:100vh;
-    background:#f4f4f4;
-    box-shadow:-3px 0 8px rgba(0,0,0,0.2);
-    padding:15px;
-    box-sizing:border-box;
-    overflow:auto;
-    transform:translateX(100%);
-    transition:0.3s;
-    z-index:1000;
+position:absolute;right:0;top:0;
+width:360px;height:100vh;
+background:#f4f4f4;
+box-shadow:-3px 0 8px rgba(0,0,0,0.2);
+padding:15px;overflow:auto;
+transform:translateX(100%);
+transition:0.3s;z-index:1000;
 }
 #sidebar.active{transform:translateX(0);}
 
 #toggleBtn{
-    position:absolute;
-    top:15px; right:15px;
-    background:white;
-    padding:8px 12px;
-    border:none;
-    font-size:18px;
-    border-radius:6px;
-    cursor:pointer;
-    box-shadow:0 2px 6px rgba(0,0,0,0.2);
-    z-index:1100;
+position:absolute;top:15px;right:15px;
+z-index:1200;padding:8px 12px;
+border:none;border-radius:6px;
+cursor:pointer;background:white;
+box-shadow:0 2px 6px rgba(0,0,0,0.2);
 }
 
-/* Category */
-.category{
-    font-weight:bold;
-    margin-top:10px;
-    cursor:pointer;
-    padding:6px;
-    background:#e1e1e1;
-    border-radius:4px;
+#darkToggle{
+position:absolute;top:15px;left:15px;
+z-index:1200;padding:8px 12px;
+border:none;border-radius:6px;
+cursor:pointer;background:white;
 }
 
-/* Year */
-.year{
-    margin-left:15px;
-    margin-top:8px;
-    display:flex;
-    align-items:center;
-    cursor:pointer;
+/* Expand animation */
+.year-container{
+max-height:0;
+overflow:hidden;
+transition:max-height 0.4s ease;
 }
 
-/* Toggle bulat */
+/* Row */
+.row{
+display:flex;
+align-items:center;
+margin-top:8px;
+cursor:pointer;
+}
+
+/* Toggle bulat timbul */
 .toggle{
-    width:14px;
-    height:14px;
-    border-radius:50%;
-    border:2px solid #2c7be5;
-    margin-right:8px;
-    cursor:pointer;
-    transition:0.2s;
+width:18px;height:18px;
+border-radius:50%;
+background:#d6d6d6;
+margin-right:10px;
+cursor:pointer;
+transition:all 0.2s ease;
+box-shadow:
+inset 2px 2px 4px rgba(0,0,0,0.15),
+inset -2px -2px 4px rgba(255,255,255,0.7);
 }
 .toggle.active{
-    background:#2c7be5;
+background:#2c7be5;
+box-shadow:0 0 6px rgba(44,123,229,0.6);
 }
+
+#loading{
+position:absolute;top:50%;left:50%;
+transform:translate(-50%,-50%);
+background:white;padding:15px 25px;
+border-radius:8px;
+box-shadow:0 4px 10px rgba(0,0,0,0.2);
+z-index:2000;font-weight:bold;
+}
+
+/* Dark mode */
+body.dark{background:#1e1e1e;color:#ddd;}
+body.dark #sidebar{background:#2b2b2b;color:white;}
+body.dark #loading{background:#333;color:white;}
 </style>
 </head>
 
@@ -80,10 +89,23 @@ body{margin:0;font-family:Arial, sans-serif;overflow:hidden;}
 
 <div id="map"></div>
 <button id="toggleBtn">☰</button>
+<button id="darkToggle">🌙</button>
+<div id="loading">Loading data...</div>
 
 <div id="sidebar">
-    <h2>Layer Control</h2>
-    <div id="layerList">Loading...</div>
+<h2>Layer Control</h2>
+
+<input type="text" id="searchInput"
+placeholder="Cari layer..."
+style="width:100%;padding:8px;margin-bottom:10px;border-radius:6px;border:1px solid #ccc;">
+
+<hr>
+<h3>Upload Temporary</h3>
+<input type="file" id="uploadInput" multiple
+accept=".zip,.kml,.kmz"
+style="width:100%;margin-bottom:10px;">
+
+<div id="layerList"></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -91,187 +113,244 @@ body{margin:0;font-family:Arial, sans-serif;overflow:hidden;}
 <script src="https://unpkg.com/leaflet-omnivore@latest/leaflet-omnivore.min.js"></script>
 
 <script>
-// ================= SETTINGS =================
-const OWNER = "GeoSpatialNusantara";
-const REPO = "WebGis";
-const BRANCH = "main";
-const ROOT_FOLDER = "file";
-const markerImage = "./img/point-of-interest.png";
+// ===== GITHUB CONFIG =====
+const OWNER="GeoSpatialNusantara";
+const REPO="WebGis";
+const BRANCH="main";
+const ROOT_FOLDER="file";
+const markerImage="./img/point-of-interest.png";
 
-// ================= INIT MAP =================
-const map = L.map('map',{minZoom:5,maxZoom:18})
+// ===== MAP =====
+const map=L.map('map',{minZoom:5,maxZoom:18})
 .setView([-2.5,118],5);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
-.addTo(map);
+// Basemaps
+const osm=L.tileLayer(
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+const googleSat=L.tileLayer(
+'https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+{subdomains:['mt0','mt1','mt2','mt3']});
+const topo=L.tileLayer(
+'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png');
 
-// ================= STORAGE =================
-let layerStore = {};
-let markerStore = {};
+osm.addTo(map);
 
-// ================= SIDEBAR =================
+L.control.layers({
+"OpenStreetMap":osm,
+"Google Satellite":googleSat,
+"Topography":topo
+}).addTo(map);
+
+let layerStore={},markerStore={};
+
+// Sidebar toggle
 document.getElementById("toggleBtn")
-.addEventListener("click",()=>{
-    document.getElementById("sidebar")
-    .classList.toggle("active");
+.onclick=()=>document.getElementById("sidebar")
+.classList.toggle("active");
+
+// Dark mode
+document.getElementById("darkToggle")
+.onclick=()=>document.body.classList.toggle("dark");
+
+// Fetch GitHub
+async function fetchGitHub(path){
+const url=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`;
+const res=await fetch(url);
+return await res.json();
+}
+
+// Load Structure
+async function loadStructure(){
+const container=document.getElementById("layerList");
+container.innerHTML="";
+
+const categories=await fetchGitHub(ROOT_FOLDER);
+
+for(const cat of categories){
+if(cat.type!=="dir") continue;
+
+const catRow=document.createElement("div");
+catRow.className="row";
+
+const catToggle=document.createElement("div");
+catToggle.className="toggle";
+
+const catLabel=document.createElement("span");
+catLabel.innerText=cat.name;
+catLabel.style.fontWeight="bold";
+
+catRow.appendChild(catToggle);
+catRow.appendChild(catLabel);
+container.appendChild(catRow);
+
+const yearContainer=document.createElement("div");
+yearContainer.className="year-container";
+container.appendChild(yearContainer);
+
+catLabel.onclick=()=>{
+document.querySelectorAll(".year-container")
+.forEach(el=>{if(el!==yearContainer)el.style.maxHeight=null;});
+yearContainer.style.maxHeight=
+yearContainer.style.maxHeight?null:
+yearContainer.scrollHeight+"px";
+};
+
+const years=await fetchGitHub(cat.path);
+
+for(const year of years){
+if(year.type!=="dir") continue;
+
+const row=document.createElement("div");
+row.className="row";
+row.style.marginLeft="20px";
+
+const toggle=document.createElement("div");
+toggle.className="toggle";
+
+const label=document.createElement("span");
+label.innerText=year.name;
+
+row.appendChild(toggle);
+row.appendChild(label);
+yearContainer.appendChild(row);
+
+const files=await fetchGitHub(year.path);
+let fileCount=0;
+
+for(const file of files){
+if(!file.name.match(/\.(zip|kml|kmz)$/i)) continue;
+fileCount++;
+await loadLayer(
+file.path,
+file.download_url,
+file.name.replace(/\.(zip|kml|kmz)$/i,"")
+);
+}
+
+label.innerHTML+=` <small>(${fileCount})</small>`;
+
+// Toggle year
+toggle.onclick=(e)=>{
+e.stopPropagation();
+toggle.classList.toggle("active");
+const active=toggle.classList.contains("active");
+
+let bounds=[];
+for(let key in layerStore){
+if(key.startsWith(year.path)){
+if(active){
+map.addLayer(layerStore[key]);
+map.addLayer(markerStore[key]);
+bounds.push(layerStore[key]);
+}else{
+map.removeLayer(layerStore[key]);
+map.removeLayer(markerStore[key]);
+}
+}
+}
+if(active && bounds.length){
+map.fitBounds(L.featureGroup(bounds).getBounds(),{padding:[50,50]});
+}
+};
+}
+
+// Toggle category
+catToggle.onclick=()=>{
+catToggle.classList.toggle("active");
+const active=catToggle.classList.contains("active");
+yearContainer.querySelectorAll(".toggle")
+.forEach(t=>{
+if(active)t.classList.add("active");
+else t.classList.remove("active");
+t.onclick(new Event("click"));
+});
+};
+}
+
+document.getElementById("loading").style.display="none";
+}
+
+// Load layer (default OFF)
+async function loadLayer(key,url,name){
+let layer;
+
+if(url.endsWith(".zip")){
+const res=await fetch(url);
+const buffer=await res.arrayBuffer();
+const data=await shp(buffer);
+layer=L.geoJSON(data);
+}else{
+layer=omnivore.kml(url);
+}
+
+layerStore[key]=layer;
+createMarker(layer,key,name);
+}
+
+// Marker
+function createMarker(layer,key,name){
+layer.on("ready",()=>{
+const center=layer.getBounds().getCenter();
+const size=Math.max(35,map.getZoom()*2);
+const icon=L.icon({
+iconUrl:markerImage,
+iconSize:[size,size],
+iconAnchor:[size/2,size]
+});
+const marker=L.marker(center,{icon});
+marker.bindTooltip(name);
+markerStore[key]=marker;
+});
+}
+
+// Resize marker
+map.on("zoomend",()=>{
+const size=Math.max(35,map.getZoom()*2);
+for(let key in markerStore){
+markerStore[key].setIcon(L.icon({
+iconUrl:markerImage,
+iconSize:[size,size],
+iconAnchor:[size/2,size]
+}));
+}
 });
 
-// ================= GITHUB FETCH =================
-async function fetchGitHub(path){
-    const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`;
-    const res = await fetch(url);
-    return await res.json();
+// Search
+document.getElementById("searchInput")
+.addEventListener("keyup",function(){
+const keyword=this.value.toLowerCase();
+document.querySelectorAll(".row")
+.forEach(row=>{
+row.style.display=row.innerText.toLowerCase()
+.includes(keyword)?"flex":"none";
+});
+});
+
+// Upload temporary
+document.getElementById("uploadInput")
+.addEventListener("change",async function(e){
+for(const file of e.target.files){
+const name=file.name.replace(/\.(zip|kml|kmz)$/i,"");
+const key="upload_"+Date.now();
+
+if(file.name.endsWith(".zip")){
+const buffer=await file.arrayBuffer();
+const data=await shp(buffer);
+const layer=L.geoJSON(data).addTo(map);
+layerStore[key]=layer;
+map.fitBounds(layer.getBounds());
 }
-
-// ================= LOAD STRUCTURE =================
-async function loadStructure(){
-
-    const container = document.getElementById("layerList");
-    container.innerHTML="";
-
-    const categories = await fetchGitHub(ROOT_FOLDER);
-
-    for(const cat of categories){
-        if(cat.type !== "dir") continue;
-
-        const catDiv = document.createElement("div");
-        catDiv.className="category";
-        catDiv.innerText=cat.name;
-        container.appendChild(catDiv);
-
-        const yearContainer = document.createElement("div");
-        yearContainer.style.display="none";
-        container.appendChild(yearContainer);
-
-        catDiv.onclick=()=>{
-            yearContainer.style.display=
-            yearContainer.style.display==="none"?"block":"none";
-        };
-
-        const years = await fetchGitHub(cat.path);
-
-        for(const year of years){
-            if(year.type !== "dir") continue;
-
-            const row=document.createElement("div");
-            row.className="year";
-
-            const toggle=document.createElement("div");
-            toggle.className="toggle active";
-
-            const label=document.createElement("span");
-            label.innerText=year.name;
-
-            row.appendChild(toggle);
-            row.appendChild(label);
-            yearContainer.appendChild(row);
-
-            const files=await fetchGitHub(year.path);
-
-            for(const file of files){
-                if(!file.name.match(/\.(zip|kml|kmz)$/i)) continue;
-
-                await loadLayer(
-                    file.path,
-                    file.download_url,
-                    file.name.replace(/\.(zip|kml|kmz)$/i,"")
-                );
-            }
-
-            toggle.onclick=(e)=>{
-                e.stopPropagation();
-                toggle.classList.toggle("active");
-                const active=toggle.classList.contains("active");
-
-                for(let key in layerStore){
-                    if(key.startsWith(year.path)){
-                        if(active){
-                            map.addLayer(layerStore[key]);
-                            map.addLayer(markerStore[key]);
-                        }else{
-                            map.removeLayer(layerStore[key]);
-                            map.removeLayer(markerStore[key]);
-                        }
-                    }
-                }
-            };
-        }
-    }
+else{
+const reader=new FileReader();
+reader.onload=function(evt){
+const layer=omnivore.kml.parse(evt.target.result)
+.addTo(map);
+layerStore[key]=layer;
+map.fitBounds(layer.getBounds());
+};
+reader.readAsText(file);
 }
-
-// ================= LOAD LAYER =================
-async function loadLayer(key,url,name){
-
-    let layer;
-
-    if(url.endsWith(".zip")){
-        const res=await fetch(url);
-        const buffer=await res.arrayBuffer();
-        const data=await shp(buffer);
-        layer=L.geoJSON(data).addTo(map);
-        createMarker(layer,key,name);
-    }
-    else{
-        layer=omnivore.kml(url)
-        .on("ready",function(){
-            map.addLayer(layer);
-            createMarker(layer,key,name);
-        });
-    }
-
-    layerStore[key]=layer;
 }
-
-// ================= CREATE MARKER =================
-function createMarker(layer,key,name){
-
-    if(!layer.getBounds || !layer.getBounds().isValid()) return;
-
-    const center=layer.getBounds().getCenter();
-    const size=Math.max(35,map.getZoom()*2);
-
-    const icon=L.icon({
-        iconUrl:markerImage,
-        iconSize:[size,size],
-        iconAnchor:[size/2,size]
-    });
-
-    const marker=L.marker(center,{icon:icon}).addTo(map);
-
-    marker.bindTooltip(name,{direction:"top"});
-
-    marker.on("mouseover",()=>{
-        const hover=size*1.5;
-        marker.setIcon(L.icon({
-            iconUrl:markerImage,
-            iconSize:[hover,hover],
-            iconAnchor:[hover/2,hover]
-        }));
-        marker.openTooltip();
-    });
-
-    marker.on("mouseout",()=>{
-        marker.setIcon(icon);
-        marker.closeTooltip();
-    });
-
-    marker.on("click",()=>{
-        map.fitBounds(layer.getBounds());
-    });
-
-    markerStore[key]=marker;
-}
-
-// ================= RESIZE MARKER ON ZOOM =================
-map.on("zoomend",()=>{
-    const size=Math.max(35,map.getZoom()*2);
-    for(let key in markerStore){
-        markerStore[key].setIcon(L.icon({
-            iconUrl:markerImage,
-            iconSize:[size,size],
-            iconAnchor:[size/2,size]
-        }));
-    }
 });
 
 loadStructure();
