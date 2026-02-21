@@ -94,6 +94,7 @@ const OWNER = "GeoSpatialNusantara";
 const REPO = "WebGis";
 const BRANCH = "main";
 const ROOT_FOLDER = "file";
+const markerImage = "./img/point-of-interest.png";
 
 // ===== INIT MAP =====
 const map = L.map('map',{minZoom:5, maxZoom:18})
@@ -211,7 +212,7 @@ async function loadLayer(key, url, name){
 
     let layer;
 
-    // SHP ZIP
+    // ===== SHP ZIP =====
     if(url.endsWith(".zip")){
         const res = await fetch(url);
         const arrayBuffer = await res.arrayBuffer();
@@ -219,7 +220,7 @@ async function loadLayer(key, url, name){
         layer = L.geoJSON(data);
     }
 
-    // KML / KMZ
+    // ===== KML / KMZ =====
     else {
         layer = omnivore.kml(url);
     }
@@ -227,61 +228,63 @@ async function loadLayer(key, url, name){
     layer.addTo(map);
     layerStore[key] = layer;
 
+    // Saat layer siap
     layer.on("ready", ()=>{
-        const size = Math.max(40, map.getZoom()*2);
+
+        if(!layer.getBounds || !layer.getBounds().isValid()) return;
+
         const center = layer.getBounds().getCenter();
+        const baseSize = Math.max(35, map.getZoom()*2);
 
-        const marker = L.marker(center,{
-            icon:L.icon({
-                iconUrl:markerImage,
-                iconSize:[size,size],
-                iconAnchor:[size/2,size]
-            })
-        }).addTo(map);
+        const icon = L.icon({
+            iconUrl: markerImage,
+            iconSize: [baseSize, baseSize],
+            iconAnchor: [baseSize/2, baseSize]
+        });
 
-        marker.bindTooltip(name,{direction:"top"});
+        const marker = L.marker(center,{icon:icon}).addTo(map);
 
+        marker.bindTooltip(name,{
+            direction:"top",
+            offset:[0,-baseSize/2]
+        });
+
+        // Hover membesar
         marker.on("mouseover",()=>{
+            const hoverSize = baseSize*1.5;
             marker.setIcon(L.icon({
-                iconUrl:markerImage,
-                iconSize:[size*1.4,size*1.4],
-                iconAnchor:[(size*1.4)/2,size*1.4]
+                iconUrl: markerImage,
+                iconSize: [hoverSize, hoverSize],
+                iconAnchor: [hoverSize/2, hoverSize]
             }));
             marker.openTooltip();
         });
 
         marker.on("mouseout",()=>{
-            marker.setIcon(L.icon({
-                iconUrl:markerImage,
-                iconSize:[size,size],
-                iconAnchor:[size/2,size]
-            }));
+            marker.setIcon(icon);
             marker.closeTooltip();
         });
 
-        marker.on("click", ()=>{
+        marker.on("click",()=>{
             map.fitBounds(layer.getBounds());
         });
 
         markerStore[key] = marker;
     });
-
-    // For KML/KMZ, fitBounds if ready
-    if(url.endsWith(".kml")||url.endsWith(".kmz")){
-        layer.on("ready", ()=>{
-            map.fitBounds(layer.getBounds());
-        });
-    }
 }
-
 // ===== UPDATE MARKER SIZE ON ZOOM =====
 map.on("zoomend",()=>{
-    const size = Math.max(40, map.getZoom()*2);
+
+    const size = Math.max(35, map.getZoom()*2);
+
     for(let key in markerStore){
-        markerStore[key].setIcon(L.icon({
-            iconUrl:markerImage,
-            iconSize:[size,size],
-            iconAnchor:[size/2,size]
+
+        const marker = markerStore[key];
+
+        marker.setIcon(L.icon({
+            iconUrl: markerImage,
+            iconSize: [size,size],
+            iconAnchor: [size/2,size]
         }));
     }
 });
