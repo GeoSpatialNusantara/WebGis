@@ -9,56 +9,44 @@
 body{margin:0;font-family:Arial}
 #map{height:100vh;width:100%}
 
-/* ================= SIDEBAR ================= */
+/* Sidebar */
 #sidebar{
-position:fixed;
-top:0;
-right:0;
-width:370px;
-height:100%;
+position:absolute;right:0;top:0;
+width:370px;height:100%;
 background:#f4f4f4;
 box-shadow:-3px 0 10px rgba(0,0,0,.2);
 transform:translateX(100%);
-transition:.3s;
-z-index:1000;
+transition:.3s;z-index:1000;
 overflow:hidden;
 }
 #sidebar.active{transform:translateX(0)}
 
 #toggleBtn{
-position:fixed;
-top:15px;
-right:15px;
-z-index:2000;
-padding:8px 12px;
-border:none;
-border-radius:6px;
-background:white;
-cursor:pointer;
+position:absolute;top:15px;right:15px;
+z-index:1200;padding:8px 12px;
+border:none;border-radius:6px;
+background:white;cursor:pointer;
 box-shadow:0 2px 6px rgba(0,0,0,.2);
-transition:right .3s ease;
 }
 
-/* ================= TABS ================= */
+/* Tabs */
 .tabs{display:flex;background:#e0e0e0}
 .tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-weight:bold}
 .tab.active{background:white;border-bottom:3px solid #2c7be5}
 .tab-content{display:none;padding:15px;height:calc(100% - 45px);overflow:auto}
 .tab-content.active{display:block}
 
-/* ================= ROW ================= */
+/* Row */
 .row{display:flex;align-items:center;margin-top:8px}
 .arrow{margin-right:6px;cursor:pointer;transition:.3s}
 .arrow.rotate{transform:rotate(90deg)}
-
 .toggle{
 width:16px;height:16px;border-radius:50%;
 background:#bbb;margin-right:8px;cursor:pointer;
 transition:.2s;
 }
 .toggle.active{background:#2c7be5}
-
-.year-container{display:none;margin-left:20px}
+.year-container{display:none;margin-left:15px}
 
 input{
 width:100%;padding:8px;margin-bottom:10px;
@@ -75,14 +63,31 @@ border-radius:6px;border:1px solid #ccc;
 <div id="sidebar">
 
 <div class="tabs">
-<div class="tab active" data-tab="layerTab">Layer</div>
+<div class="tab active" data-tab="basemapTab">Basemap</div>
+<div class="tab" data-tab="layerTab">Layer</div>
 <div class="tab" data-tab="uploadTab">Upload</div>
 </div>
 
-<div id="layerTab" class="tab-content active">
+<!-- BASEMAP -->
+<div id="basemapTab" class="tab-content active">
+<div class="row">
+<div class="toggle active" id="osmToggle"></div>
+OpenStreetMap
+</div>
+
+<div class="row">
+<div class="toggle" id="esriToggle"></div>
+ESRI Satellite
+</div>
+</div>
+
+<!-- LAYER -->
+<div id="layerTab" class="tab-content">
+<input type="text" id="searchInput" placeholder="Cari layer...">
 <div id="layerList"></div>
 </div>
 
+<!-- UPLOAD -->
 <div id="uploadTab" class="tab-content">
 <input type="file" id="uploadInput" multiple accept=".zip,.kml,.kmz">
 <hr>
@@ -103,16 +108,31 @@ const ROOT="file";
 const markerImage="./img/point-of-interest.png";
 
 const map=L.map('map').setView([-2.5,118],5);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-toggleBtn.onclick=()=>{
-sidebar.classList.toggle("active");
-if(sidebar.classList.contains("active")){
-toggleBtn.style.right="385px";
+/* ================= BASEMAP ================= */
+const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+const esri=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
+
+function activateBasemap(type){
+osm.remove();
+esri.remove();
+document.getElementById("osmToggle").classList.remove("active");
+document.getElementById("esriToggle").classList.remove("active");
+
+if(type==="osm"){
+osm.addTo(map);
+osmToggle.classList.add("active");
 }else{
-toggleBtn.style.right="15px";
+esri.addTo(map);
+esriToggle.classList.add("active");
 }
-};
+}
+
+osmToggle.onclick=()=>activateBasemap("osm");
+esriToggle.onclick=()=>activateBasemap("esri");
+
+/* ================= SIDEBAR ================= */
+toggleBtn.onclick=()=>sidebar.classList.toggle("active");
 
 document.querySelectorAll(".tab").forEach(tab=>{
 tab.onclick=function(){
@@ -122,6 +142,8 @@ tab.classList.add("active");
 document.getElementById(tab.dataset.tab).classList.add("active");
 };
 });
+
+/* ================= LAYER GITHUB ================= */
 
 let layerStore={};
 
@@ -145,13 +167,10 @@ const arrow=document.createElement("span");
 arrow.className="arrow";
 arrow.innerHTML="▶";
 
-const catToggle=document.createElement("div");
-catToggle.className="toggle";
-
 const label=document.createElement("span");
 label.innerText=cat.name;
 
-row.append(arrow,catToggle,label);
+row.append(arrow,label);
 container.appendChild(row);
 
 const yearContainer=document.createElement("div");
@@ -162,19 +181,6 @@ arrow.onclick=()=>{
 yearContainer.style.display=
 yearContainer.style.display==="block"?"none":"block";
 arrow.classList.toggle("rotate");
-};
-
-let yearToggles=[];
-
-catToggle.onclick=async(e)=>{
-e.stopPropagation();
-catToggle.classList.toggle("active");
-const active=catToggle.classList.contains("active");
-
-for(const y of yearToggles){
-if(active && !y.classList.contains("active")) await y.click();
-if(!active && y.classList.contains("active")) await y.click();
-}
 };
 
 const years=await fetchGitHub(cat.path);
@@ -194,9 +200,8 @@ yLabel.innerText=year.name;
 yRow.append(yToggle,yLabel);
 yearContainer.appendChild(yRow);
 
-yearToggles.push(yToggle);
-
 const files=await fetchGitHub(year.path);
+
 for(const file of files){
 if(!file.name.match(/\.(zip|kml|kmz)$/i)) continue;
 layerStore[file.path]={url:file.download_url,layer:null,marker:null};
@@ -215,8 +220,10 @@ for(let key in layerStore){
 if(key.startsWith(path)){
 if(active) await loadLayer(key);
 else{
-if(layerStore[key].layer) map.removeLayer(layerStore[key].layer);
-if(layerStore[key].marker) map.removeLayer(layerStore[key].marker);
+if(layerStore[key].layer){
+map.removeLayer(layerStore[key].layer);
+map.removeLayer(layerStore[key].marker);
+}
 }
 }
 }
@@ -225,7 +232,7 @@ if(layerStore[key].marker) map.removeLayer(layerStore[key].marker);
 async function loadLayer(key){
 if(layerStore[key].layer){
 map.addLayer(layerStore[key].layer);
-if(layerStore[key].marker) map.addLayer(layerStore[key].marker);
+map.addLayer(layerStore[key].marker);
 map.fitBounds(layerStore[key].layer.getBounds());
 return;
 }
@@ -242,33 +249,29 @@ layer=omnivore.kml(layerStore[key].url).addTo(map);
 }
 
 layer.on("ready",()=>{
-const bounds=layer.getBounds();
-const center=bounds.getCenter();
-
+const center=layer.getBounds().getCenter();
 const icon=L.icon({
 iconUrl:markerImage,
 iconSize:[30,30],
 iconAnchor:[15,30]
 });
-
-if(layerStore[key].marker){
-map.removeLayer(layerStore[key].marker);
-}
-
 const marker=L.marker(center,{icon}).addTo(map);
-
 layerStore[key].marker=marker;
-map.fitBounds(bounds);
+map.fitBounds(layer.getBounds());
 });
 
 layerStore[key].layer=layer;
 }
 
 /* ================= UPLOAD ================= */
+
 uploadInput.addEventListener("change",async e=>{
 for(const file of e.target.files){
 
+const key="upload_"+Date.now()+file.name;
+
 let layer;
+
 if(file.name.endsWith(".zip")){
 const buffer=await file.arrayBuffer();
 const geo=await shp(buffer);
@@ -277,7 +280,6 @@ layer=L.geoJSON(geo);
 layer=omnivore.kml.parse(await file.text());
 }
 
-const key="upload_"+Date.now()+file.name;
 layerStore[key]={layer:layer,marker:null};
 
 const row=document.createElement("div");
@@ -306,6 +308,7 @@ toggle.click();
 }
 });
 
+/* ================= START ================= */
 loadStructure();
 </script>
 
