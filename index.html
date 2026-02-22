@@ -9,7 +9,7 @@
 body{margin:0;font-family:Arial}
 #map{height:100vh;width:100%}
 
-/* ==== SEARCH BOX ==== */
+/* ================= SEARCH ================= */
 #searchBox{
 position:fixed;
 top:15px;
@@ -23,7 +23,39 @@ border:1px solid #ccc;
 box-shadow:0 2px 6px rgba(0,0,0,.2);
 }
 
-/* ==== SIDEBAR ==== */
+/* ================= BASEMAP SIDEBAR KIRI ================= */
+#basemapSidebar{
+position:fixed;
+top:80px;
+left:10px;
+z-index:1500;
+background:white;
+border-radius:8px;
+box-shadow:0 2px 8px rgba(0,0,0,.2);
+padding:10px;
+width:160px;
+}
+
+.basemap-title{
+font-weight:bold;
+margin-bottom:8px;
+}
+
+.basemap-item{
+padding:6px;
+border-radius:6px;
+cursor:pointer;
+margin-bottom:5px;
+background:#eee;
+transition:.2s;
+}
+
+.basemap-item.active{
+background:#2c7be5;
+color:white;
+}
+
+/* ================= SIDEBAR KANAN ================= */
 #sidebar{
 position:fixed;
 top:0;
@@ -53,32 +85,7 @@ box-shadow:0 2px 6px rgba(0,0,0,.2);
 transition:right .3s ease;
 }
 
-/* ==== BASEMAP BUTTON ==== */
-#basemapControl{
-position:absolute;
-top:90px;
-left:10px;
-z-index:1000;
-background:white;
-padding:6px;
-border-radius:6px;
-box-shadow:0 2px 6px rgba(0,0,0,.2);
-}
-#basemapControl button{
-display:block;
-margin:4px 0;
-width:90px;
-padding:5px;
-cursor:pointer;
-}
-
-/* ==== TABS ==== */
-.tabs{display:flex;background:#e0e0e0}
-.tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-weight:bold}
-.tab.active{background:white;border-bottom:3px solid #2c7be5}
-.tab-content{display:none;padding:15px;height:calc(100% - 45px);overflow:auto}
-.tab-content.active{display:block}
-
+/* ================= ROW ================= */
 .row{display:flex;align-items:center;margin-top:8px}
 .arrow{margin-right:6px;cursor:pointer;transition:.3s}
 .arrow.rotate{transform:rotate(90deg)}
@@ -98,6 +105,14 @@ background:#bbb;margin-right:8px;cursor:pointer;
 <input type="text" id="searchBox" placeholder="Cari layer...">
 
 <div id="map"></div>
+
+<!-- BASMAP SIDEBAR KIRI -->
+<div id="basemapSidebar">
+  <div class="basemap-title">Basemap</div>
+  <div class="basemap-item active" data-map="sat">Satelit</div>
+  <div class="basemap-item" data-map="osm">OpenStreetMap</div>
+</div>
+
 <button id="toggleBtn">☰</button>
 
 <div id="sidebar">
@@ -115,7 +130,7 @@ const BRANCH="main";
 const ROOT="file";
 const markerImage="./img/point-of-interest.png";
 
-/* ==== BATAS INDONESIA ==== */
+/* ================= BATAS INDONESIA ================= */
 const boundsIndonesia = L.latLngBounds(
 [-11.5, 94.5],
 [6.5, 141.5]
@@ -126,7 +141,7 @@ maxBounds: boundsIndonesia,
 maxBoundsViscosity:1.0
 }).fitBounds(boundsIndonesia);
 
-/* ==== BASEMAP ==== */
+/* ================= BASEMAP ================= */
 const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
 const satellite=L.tileLayer(
 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
@@ -134,27 +149,27 @@ const satellite=L.tileLayer(
 
 satellite.addTo(map); // default satelit
 
-/* ==== BASEMAP CONTROL ==== */
-const basemapControl=L.control({position:'topleft'});
-basemapControl.onAdd=function(){
-const div=L.DomUtil.create('div','');
-div.id="basemapControl";
-div.innerHTML=`
-<button onclick="setBasemap('sat')">Satelit</button>
-<button onclick="setBasemap('osm')">OSM</button>
-`;
-return div;
-};
-basemapControl.addTo(map);
+document.querySelectorAll(".basemap-item").forEach(btn=>{
+btn.onclick=function(){
 
-function setBasemap(type){
+document.querySelectorAll(".basemap-item")
+.forEach(b=>b.classList.remove("active"));
+
+btn.classList.add("active");
+
 map.removeLayer(osm);
 map.removeLayer(satellite);
-if(type==="osm") osm.addTo(map);
-else satellite.addTo(map);
+
+if(btn.dataset.map==="osm"){
+osm.addTo(map);
+}else{
+satellite.addTo(map);
 }
 
-/* ==== SIDEBAR BUTTON ==== */
+};
+});
+
+/* ================= SIDEBAR BUTTON ================= */
 toggleBtn.onclick=()=>{
 sidebar.classList.toggle("active");
 toggleBtn.style.right=sidebar.classList.contains("active")?"385px":"15px";
@@ -163,14 +178,13 @@ toggleBtn.style.right=sidebar.classList.contains("active")?"385px":"15px";
 let layerStore={};
 let allFileNames=[];
 
-/* ==== FETCH ==== */
 async function fetchGitHub(path){
 const url=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`;
 const res=await fetch(url);
 return await res.json();
 }
 
-/* ==== LOAD STRUCTURE ==== */
+/* ================= LOAD STRUCTURE ================= */
 async function loadStructure(){
 const container=document.getElementById("layerList");
 const cats=await fetchGitHub(ROOT);
@@ -261,12 +275,12 @@ if(layerStore[key].marker) map.removeLayer(layerStore[key].marker);
 }
 }
 
-/* ==== LOAD LAYER ==== */
+/* ================= LOAD LAYER ================= */
 async function loadLayer(key){
 
 if(layerStore[key].layer){
 map.addLayer(layerStore[key].layer);
-map.addLayer(layerStore[key].marker);
+if(layerStore[key].marker) map.addLayer(layerStore[key].marker);
 map.fitBounds(layerStore[key].layer.getBounds());
 return;
 }
@@ -284,6 +298,8 @@ layer=omnivore.kml(layerStore[key].url).addTo(map);
 
 setTimeout(()=>{
 const bounds=layer.getBounds();
+if(!bounds.isValid()) return;
+
 const center=bounds.getCenter();
 
 const icon=L.icon({
@@ -296,12 +312,13 @@ const marker=L.marker(center,{icon}).addTo(map);
 
 layerStore[key].marker=marker;
 map.fitBounds(bounds);
+
 },800);
 
 layerStore[key].layer=layer;
 }
 
-/* ==== SEARCH ==== */
+/* ================= SEARCH ================= */
 searchBox.addEventListener("input",function(){
 const val=this.value.toLowerCase();
 const match=allFileNames.find(n=>n.toLowerCase().includes(val));
