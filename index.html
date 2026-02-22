@@ -9,53 +9,6 @@
 body{margin:0;font-family:Arial}
 #map{height:100vh;width:100%}
 
-/* ================= SEARCH ================= */
-#searchBox{
-position:fixed;
-top:15px;
-left:50%;
-transform:translateX(-50%);
-z-index:2000;
-width:300px;
-padding:8px 12px;
-border-radius:20px;
-border:1px solid #ccc;
-box-shadow:0 2px 6px rgba(0,0,0,.2);
-}
-
-/* ================= BASEMAP SIDEBAR KIRI ================= */
-#basemapSidebar{
-position:fixed;
-top:80px;
-left:10px;
-z-index:1500;
-background:white;
-border-radius:8px;
-box-shadow:0 2px 8px rgba(0,0,0,.2);
-padding:10px;
-width:160px;
-}
-
-.basemap-title{
-font-weight:bold;
-margin-bottom:8px;
-}
-
-.basemap-item{
-padding:6px;
-border-radius:6px;
-cursor:pointer;
-margin-bottom:5px;
-background:#eee;
-transition:.2s;
-}
-
-.basemap-item.active{
-background:#2c7be5;
-color:white;
-}
-
-/* ================= SIDEBAR KANAN ================= */
 #sidebar{
 position:fixed;
 top:0;
@@ -67,7 +20,7 @@ box-shadow:-3px 0 10px rgba(0,0,0,.2);
 transform:translateX(100%);
 transition:.3s;
 z-index:1000;
-overflow:hidden;
+overflow:auto;
 }
 #sidebar.active{transform:translateX(0)}
 
@@ -85,7 +38,12 @@ box-shadow:0 2px 6px rgba(0,0,0,.2);
 transition:right .3s ease;
 }
 
-/* ================= ROW ================= */
+.tabs{display:flex;background:#e0e0e0}
+.tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-weight:bold}
+.tab.active{background:white;border-bottom:3px solid #2c7be5}
+.tab-content{display:none;padding:15px}
+.tab-content.active{display:block}
+
 .row{display:flex;align-items:center;margin-top:8px}
 .arrow{margin-right:6px;cursor:pointer;transition:.3s}
 .arrow.rotate{transform:rotate(90deg)}
@@ -93,30 +51,39 @@ transition:right .3s ease;
 .toggle{
 width:16px;height:16px;border-radius:50%;
 background:#bbb;margin-right:8px;cursor:pointer;
+transition:.2s;
 }
 .toggle.active{background:#2c7be5}
 
 .year-container{display:none;margin-left:20px}
+
+input{
+width:100%;padding:8px;margin-bottom:10px;
+border-radius:6px;border:1px solid #ccc;
+}
 </style>
 </head>
 
 <body>
 
-<input type="text" id="searchBox" placeholder="Cari layer...">
-
 <div id="map"></div>
-
-<!-- BASMAP SIDEBAR KIRI -->
-<div id="basemapSidebar">
-  <div class="basemap-title">Basemap</div>
-  <div class="basemap-item active" data-map="sat">Satelit</div>
-  <div class="basemap-item" data-map="osm">OpenStreetMap</div>
-</div>
-
 <button id="toggleBtn">☰</button>
 
 <div id="sidebar">
-<div id="layerList" style="padding:15px;"></div>
+<div class="tabs">
+<div class="tab active" data-tab="layerTab">Layer</div>
+<div class="tab" data-tab="uploadTab">Upload</div>
+</div>
+
+<div id="layerTab" class="tab-content active">
+<div id="layerList"></div>
+</div>
+
+<div id="uploadTab" class="tab-content">
+<input type="file" id="uploadInput" multiple accept=".zip,.kml,.kmz">
+<hr>
+<div id="uploadList"></div>
+</div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -130,53 +97,89 @@ const BRANCH="main";
 const ROOT="file";
 const markerImage="./img/point-of-interest.png";
 
-/* ================= BATAS INDONESIA ================= */
-const boundsIndonesia = L.latLngBounds(
-[-11.5, 94.5],
-[6.5, 141.5]
-);
-
-const map=L.map('map',{
-maxBounds: boundsIndonesia,
-maxBoundsViscosity:1.0
-}).fitBounds(boundsIndonesia);
-
-/* ================= BASEMAP ================= */
-const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-const satellite=L.tileLayer(
-'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-);
-
-satellite.addTo(map); // default satelit
-
-document.querySelectorAll(".basemap-item").forEach(btn=>{
-btn.onclick=function(){
-
-document.querySelectorAll(".basemap-item")
-.forEach(b=>b.classList.remove("active"));
-
-btn.classList.add("active");
-
-map.removeLayer(osm);
-map.removeLayer(satellite);
-
-if(btn.dataset.map==="osm"){
-osm.addTo(map);
-}else{
-satellite.addTo(map);
-}
-
-};
-});
-
-/* ================= SIDEBAR BUTTON ================= */
-toggleBtn.onclick=()=>{
-sidebar.classList.toggle("active");
-toggleBtn.style.right=sidebar.classList.contains("active")?"385px":"15px";
-};
+const map=L.map('map').setView([-2.5,118],5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
 let layerStore={};
-let allFileNames=[];
+let colorStore={};
+
+function getCategoryFromPath(path){
+return path.split("/")[1];
+}
+
+function getCategoryColor(category){
+if(!colorStore[category]){
+const hue=Math.floor(Math.random()*360);
+colorStore[category]=`hsl(${hue},70%,50%)`;
+}
+return colorStore[category];
+}
+
+function buildPopupContent(properties,downloadUrl){
+let html="<div style='font-size:13px'>";
+if(properties){
+for(let key in properties){
+if(properties[key]!==null && properties[key]!==""){
+html+=`<b>${key}</b>: ${properties[key]}<br>`;
+}
+}
+}
+if(downloadUrl){
+html+=`<hr>
+<a href="${downloadUrl}" target="_blank"
+style="display:inline-block;padding:5px 8px;
+background:#2c7be5;color:white;
+text-decoration:none;border-radius:4px">
+Download File</a>`;
+}
+html+="</div>";
+return html;
+}
+
+function createCenterMarker(key,layer){
+
+if(!layer.getBounds().isValid()) return;
+
+const center=layer.getBounds().getCenter();
+const size=map.getZoom()*2;
+
+const icon=L.icon({
+iconUrl:markerImage,
+iconSize:[size,size],
+iconAnchor:[size/2,size]
+});
+
+if(layerStore[key].marker){
+map.removeLayer(layerStore[key].marker);
+}
+
+const marker=L.marker(center,{icon}).addTo(map);
+
+marker.bindPopup(`
+<b>${key.split("/").pop()}</b><br><br>
+<a href="${layerStore[key].url}" target="_blank"
+style="display:inline-block;padding:5px 8px;
+background:#28a745;color:white;
+text-decoration:none;border-radius:4px">
+Download File</a>
+`);
+
+layerStore[key].marker=marker;
+}
+
+map.on("zoomend",()=>{
+const size=map.getZoom()*2;
+for(let key in layerStore){
+if(layerStore[key].marker){
+const icon=L.icon({
+iconUrl:markerImage,
+iconSize:[size,size],
+iconAnchor:[size/2,size]
+});
+layerStore[key].marker.setIcon(icon);
+}
+}
+});
 
 async function fetchGitHub(path){
 const url=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`;
@@ -184,98 +187,6 @@ const res=await fetch(url);
 return await res.json();
 }
 
-/* ================= LOAD STRUCTURE ================= */
-async function loadStructure(){
-const container=document.getElementById("layerList");
-const cats=await fetchGitHub(ROOT);
-
-for(const cat of cats){
-if(cat.type!=="dir") continue;
-
-const row=document.createElement("div");
-row.className="row";
-
-const arrow=document.createElement("span");
-arrow.className="arrow";
-arrow.innerHTML="▶";
-
-const catToggle=document.createElement("div");
-catToggle.className="toggle";
-
-const label=document.createElement("span");
-label.innerText=cat.name;
-
-row.append(arrow,catToggle,label);
-container.appendChild(row);
-
-const yearContainer=document.createElement("div");
-yearContainer.className="year-container";
-container.appendChild(yearContainer);
-
-arrow.onclick=()=>{
-yearContainer.style.display=
-yearContainer.style.display==="block"?"none":"block";
-arrow.classList.toggle("rotate");
-};
-
-let yearToggles=[];
-
-catToggle.onclick=()=>{
-catToggle.classList.toggle("active");
-const active=catToggle.classList.contains("active");
-yearToggles.forEach(y=>{
-if(active!==y.classList.contains("active")) y.click();
-});
-};
-
-const years=await fetchGitHub(cat.path);
-
-for(const year of years){
-if(year.type!=="dir") continue;
-
-const yRow=document.createElement("div");
-yRow.className="row";
-
-const yToggle=document.createElement("div");
-yToggle.className="toggle";
-
-const yLabel=document.createElement("span");
-yLabel.innerText=year.name;
-
-yRow.append(yToggle,yLabel);
-yearContainer.appendChild(yRow);
-
-yearToggles.push(yToggle);
-
-const files=await fetchGitHub(year.path);
-for(const file of files){
-if(!file.name.match(/\.(zip|kml|kmz)$/i)) continue;
-
-layerStore[file.path]={url:file.download_url,layer:null,marker:null,name:file.name};
-allFileNames.push(file.name);
-}
-
-yToggle.onclick=()=>toggleYear(year.path,yToggle);
-}
-}
-}
-
-async function toggleYear(path,toggle){
-toggle.classList.toggle("active");
-const active=toggle.classList.contains("active");
-
-for(let key in layerStore){
-if(key.startsWith(path)){
-if(active) await loadLayer(key);
-else{
-if(layerStore[key].layer) map.removeLayer(layerStore[key].layer);
-if(layerStore[key].marker) map.removeLayer(layerStore[key].marker);
-}
-}
-}
-}
-
-/* ================= LOAD LAYER ================= */
 async function loadLayer(key){
 
 if(layerStore[key].layer){
@@ -288,48 +199,38 @@ return;
 let layer;
 
 if(layerStore[key].url.endsWith(".zip")){
+
 const res=await fetch(layerStore[key].url);
 const buffer=await res.arrayBuffer();
-const geo=await shp(buffer);
-layer=L.geoJSON(geo).addTo(map);
-}else{
-layer=omnivore.kml(layerStore[key].url).addTo(map);
+const geoData=await shp(buffer);
+
+const category=getCategoryFromPath(key);
+const color=getCategoryColor(category);
+
+layer=L.geoJSON(geoData,{
+style:{color:color,weight:2,fillOpacity:0.3},
+onEachFeature:function(feature,layerFeature){
+layerFeature.bindPopup(
+buildPopupContent(feature.properties,layerStore[key].url)
+);
 }
+}).addTo(map);
 
-setTimeout(()=>{
-const bounds=layer.getBounds();
-if(!bounds.isValid()) return;
+}else{
 
-const center=bounds.getCenter();
-
-const icon=L.icon({
-iconUrl:markerImage,
-iconSize:[30,30],
-iconAnchor:[15,30]
-});
-
-const marker=L.marker(center,{icon}).addTo(map);
-
-layerStore[key].marker=marker;
-map.fitBounds(bounds);
-
-},800);
+layer=omnivore.kml(layerStore[key].url)
+.on("ready",function(){
+createCenterMarker(key,layer);
+map.fitBounds(layer.getBounds());
+})
+.addTo(map);
+}
 
 layerStore[key].layer=layer;
+createCenterMarker(key,layer);
+map.fitBounds(layer.getBounds());
 }
 
-/* ================= SEARCH ================= */
-searchBox.addEventListener("input",function(){
-const val=this.value.toLowerCase();
-const match=allFileNames.find(n=>n.toLowerCase().includes(val));
-if(match){
-const key=Object.keys(layerStore).find(k=>layerStore[k].name===match);
-if(key) loadLayer(key);
-}
-});
-
-loadStructure();
 </script>
-
 </body>
 </html>
