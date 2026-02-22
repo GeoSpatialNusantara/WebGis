@@ -22,11 +22,23 @@ overflow:hidden;
 #sidebar.active{transform:translateX(0)}
 
 #toggleBtn{
-position:absolute;top:15px;right:15px;
-z-index:1200;padding:8px 12px;
-border:none;border-radius:6px;
-background:white;cursor:pointer;
+position:fixed;
+top:15px;
+right:15px;
+z-index:2000;
+padding:8px 12px;
+border:none;
+border-radius:6px;
+background:white;
+cursor:pointer;
 box-shadow:0 2px 6px rgba(0,0,0,.2);
+transition: right .3s ease; /* animasi smooth */
+}
+
+/* Saat sidebar aktif, tombol ikut geser */
+#sidebar.active + #toggleBtn,
+#sidebar.active ~ #toggleBtn{
+right:385px; /* 370px sidebar + 15px jarak */
 }
 
 /* Tabs */
@@ -144,7 +156,15 @@ googleToggle.onclick=()=>activateBasemap("google");
 osmToggle.onclick=()=>activateBasemap("osm");
 
 /* ================= SIDEBAR ================= */
-toggleBtn.onclick=()=>sidebar.classList.toggle("active");
+toggleBtn.onclick=()=>{
+sidebar.classList.toggle("active");
+
+if(sidebar.classList.contains("active")){
+toggleBtn.style.right="385px";
+}else{
+toggleBtn.style.right="15px";
+}
+};
 
 document.querySelectorAll(".tab").forEach(tab=>{
 tab.onclick=function(){
