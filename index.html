@@ -7,46 +7,51 @@
 
 <style>
 body{margin:0;font-family:Arial;}
-#map{height:100vh;width:100%;}
+#map{height:100vh;width:100%}
 
 /* Sidebar */
 #sidebar{
 position:absolute;right:0;top:0;
-width:350px;height:100%;
-background:#f4f4f4;
-box-shadow:-3px 0 8px rgba(0,0,0,0.2);
+width:360px;height:100%;
+background:#f5f5f5;
+box-shadow:-3px 0 10px rgba(0,0,0,.2);
 transform:translateX(100%);
 transition:.3s;
 z-index:1000;
 overflow:hidden;
 }
-#sidebar.active{transform:translateX(0);}
+#sidebar.active{transform:translateX(0)}
 #toggleBtn{
 position:absolute;top:15px;right:15px;
 z-index:1200;padding:8px 12px;
 border:none;border-radius:6px;
-cursor:pointer;background:white;
+background:white;cursor:pointer;
 box-shadow:0 2px 6px rgba(0,0,0,.2);
 }
 
 /* Tabs */
-.tabs{display:flex;background:#e0e0e0;}
-.tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-weight:bold;}
-.tab.active{background:white;border-bottom:3px solid #2c7be5;}
-.tab-content{display:none;padding:15px;height:calc(100% - 45px);overflow:auto;}
-.tab-content.active{display:block;}
+.tabs{display:flex;background:#e0e0e0}
+.tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-weight:bold}
+.tab.active{background:white;border-bottom:3px solid #2c7be5}
+.tab-content{display:none;padding:15px;height:calc(100% - 45px);overflow:auto}
+.tab-content.active{display:block}
 
-.row{display:flex;align-items:center;margin-top:8px;}
-.arrow{margin-right:6px;cursor:pointer;transition:.3s;}
-.arrow.rotate{transform:rotate(90deg);}
+/* Rows */
+.row{display:flex;align-items:center;margin-top:8px}
+.arrow{margin-right:6px;cursor:pointer;transition:.3s}
+.arrow.rotate{transform:rotate(90deg)}
 .toggle{
 width:15px;height:15px;border-radius:50%;
 background:#bbb;margin-right:8px;cursor:pointer;
+transition:.2s;
 }
-.toggle.active{background:#2c7be5;}
+.toggle.active{background:#2c7be5}
+.year-container{display:none;margin-left:15px}
 
-.year-container{display:none;margin-left:15px;}
-input{width:100%;padding:8px;margin-bottom:10px;border-radius:6px;border:1px solid #ccc;}
+input{
+width:100%;padding:8px;margin-bottom:10px;
+border-radius:6px;border:1px solid #ccc;
+}
 
 #loading{
 position:absolute;top:50%;left:50%;
@@ -103,22 +108,15 @@ const markerImage="./img/point-of-interest.png";
 
 const map=L.map('map').setView([-2.5,118],5);
 
-// Basemap (tidak pernah dihapus)
-const basemapLayer=L.layerGroup().addTo(map);
-
-const osm=L.tileLayer(
-'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-);
-const esri=L.tileLayer(
-'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-);
-
-osm.addTo(basemapLayer);
+// Basemap aman (tidak terhapus)
+const baseGroup=L.layerGroup().addTo(map);
+const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+const esri=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
+osm.addTo(baseGroup);
 
 function switchBasemap(type){
-basemapLayer.clearLayers();
-if(type==="osm") osm.addTo(basemapLayer);
-else esri.addTo(basemapLayer);
+baseGroup.clearLayers();
+(type==="osm"?osm:esri).addTo(baseGroup);
 }
 
 // Sidebar
@@ -134,7 +132,7 @@ document.getElementById(tab.dataset.tab).classList.add("active");
 };
 });
 
-let layerStore={},markerStore={};
+let layerStore={};
 
 async function fetchGitHub(path){
 const url=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`;
@@ -184,6 +182,7 @@ yRow.className="row";
 
 const yToggle=document.createElement("div");
 yToggle.className="toggle";
+yToggle.dataset.path=year.path;
 
 const yLabel=document.createElement("span");
 yLabel.innerText=year.name;
@@ -194,28 +193,48 @@ yearContainer.appendChild(yRow);
 const files=await fetchGitHub(year.path);
 for(const file of files){
 if(!file.name.match(/\.(zip|kml|kmz)$/i)) continue;
-layerStore[file.path]={url:file.download_url,name:file.name};
+layerStore[file.path]={
+url:file.download_url,
+layer:null,
+marker:null
+};
 }
 
 yToggle.onclick=()=>toggleYear(year.path,yToggle);
 }
 
-toggle.onclick=()=>{
+// Bulk kategori (tidak mengunci tahun)
+toggle.onclick=async ()=>{
+const active=!toggle.classList.contains("active");
 toggle.classList.toggle("active");
-yearContainer.querySelectorAll(".toggle").forEach(t=>{
-if(toggle.classList.contains("active")) t.classList.add("active");
-else t.classList.remove("active");
-t.click();
-});
+
+const yearToggles=yearContainer.querySelectorAll(".toggle");
+
+for(const yToggle of yearToggles){
+if(active && !yToggle.classList.contains("active")){
+yToggle.classList.add("active");
+await toggleYear(yToggle.dataset.path,yToggle,true);
+}
+if(!active && yToggle.classList.contains("active")){
+yToggle.classList.remove("active");
+await toggleYear(yToggle.dataset.path,yToggle,false);
+}
+}
 };
 }
 
 loading.style.display="none";
 }
 
-async function toggleYear(path,btn){
+async function toggleYear(path,btn,force=null){
+
+let active;
+if(force!==null){
+active=force;
+}else{
 btn.classList.toggle("active");
-const active=btn.classList.contains("active");
+active=btn.classList.contains("active");
+}
 
 for(let key in layerStore){
 if(key.startsWith(path)){
@@ -232,6 +251,7 @@ map.removeLayer(layerStore[key].marker);
 }
 
 async function loadLayer(key){
+
 if(layerStore[key].layer){
 map.addLayer(layerStore[key].layer);
 map.addLayer(layerStore[key].marker);
@@ -240,13 +260,13 @@ return;
 }
 
 let layer;
+
 if(layerStore[key].url.endsWith(".zip")){
 const res=await fetch(layerStore[key].url);
 const buffer=await res.arrayBuffer();
 const data=await shp(buffer);
 layer=L.geoJSON(data).addTo(map);
-}
-else{
+}else{
 layer=omnivore.kml(layerStore[key].url).addTo(map);
 }
 
