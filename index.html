@@ -107,7 +107,31 @@ const map = L.map('map', {
     minZoom: 5,     // tidak bisa zoom out lebih jauh dari Indonesia
     maxZoom: 18     // tetap bisa zoom in detail
 }).setView([-2.5,118],5);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    
+// Basemap OSM (default)
+const osm = L.tileLayer(
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { attribution: '© OpenStreetMap' }
+);
+
+// Basemap Satellite (Esri)
+const satellite = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Tiles © Esri' }
+);
+
+// tampilkan default
+osm.addTo(map);
+
+// kontrol layer (pojok kiri atas)
+L.control.layers(
+    {
+        "🗺️ Peta": osm,
+        "🛰️ Satelit": satellite
+    },
+    null,
+    { position: 'topleft' }
+).addTo(map);
 
 toggleBtn.onclick=()=>{
 sidebar.classList.toggle("active");
