@@ -101,7 +101,7 @@ const OWNER="GeoSpatialNusantara";
 const REPO="WebGis";
 const BRANCH="main";
 const ROOT="file";
-const markerImage="./img/point-of-interest.png";
+const markerImage=`https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/img/point-of-interest.png`;
 
 const map=L.map('map').setView([-2.5,118],5);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -223,6 +223,30 @@ if(layerStore[key].marker) map.removeLayer(layerStore[key].marker);
 }
 }
 
+function addCenterMarker(layer,key){
+
+const bounds=layer.getBounds();
+if(!bounds || !bounds.isValid()) return;
+
+const center=bounds.getCenter();
+
+const icon=L.icon({
+iconUrl:markerImage,
+iconSize:[30,30],
+iconAnchor:[15,30]
+});
+
+if(layerStore[key].marker){
+map.removeLayer(layerStore[key].marker);
+}
+
+const marker=L.marker(center,{icon}).addTo(map);
+
+layerStore[key].marker=marker;
+
+map.fitBounds(bounds);
+}
+  
 async function loadLayer(key){
 if(layerStore[key].layer){
 map.addLayer(layerStore[key].layer);
@@ -260,29 +284,16 @@ layer=omnivore.kml.parse(kmlText).addTo(map);
 }else{
 layer=omnivore.kml(layerStore[key].url).addTo(map);
 }
-layer.on("ready",()=>{
-const bounds=layer.getBounds();
-const center=bounds.getCenter();
-
-const icon=L.icon({
-iconUrl:markerImage,
-iconSize:[30,30],
-iconAnchor:[15,30]
-});
-
-if(layerStore[key].marker){
-map.removeLayer(layerStore[key].marker);
-}
-
-const marker=L.marker(center,{icon}).addTo(map);
-
-layerStore[key].marker=marker;
-map.fitBounds(bounds);
-});
-
 layerStore[key].layer=layer;
-}
 
+if(layer instanceof L.GeoJSON){
+addCenterMarker(layer,key);
+}else{
+layer.on("ready",()=>{
+addCenterMarker(layer,key);
+});
+}
+  
 /* ================= UPLOAD ================= */
 uploadInput.addEventListener("change",async e=>{
 for(const file of e.target.files){
