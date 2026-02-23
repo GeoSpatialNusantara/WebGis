@@ -103,7 +103,10 @@ const BRANCH="main";
 const ROOT="file";
 const markerImage=`https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/img/point-of-interest.png`;
 
-const map=L.map('map').setView([-2.5,118],5);
+const map = L.map('map', {
+    minZoom: 5,     // tidak bisa zoom out lebih jauh dari Indonesia
+    maxZoom: 18     // tetap bisa zoom in detail
+}).setView([-2.5,118],5);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
 toggleBtn.onclick=()=>{
