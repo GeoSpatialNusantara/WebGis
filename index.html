@@ -89,6 +89,84 @@ border:1px solid #ddd;
 background:#2c7be5;
 color:white;
 }
+
+/* ================= RAPIIKAN BASEMAP CONTROL ================= */
+
+.leaflet-control-layers {
+    border-radius: 10px !important;
+    padding: 8px 12px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    font-size: 14px;
+}
+
+.leaflet-control-layers-base label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 4px;
+    cursor: pointer;
+}
+
+.leaflet-control-layers-base input[type="radio"] {
+    transform: scale(1.1);
+    margin: 0;
+}
+
+.leaflet-control-layers-base label:hover {
+    background: #f0f6ff;
+    border-radius: 6px;
+}
+
+/* Toggle Switch Modern */
+.switch{
+position:relative;
+display:inline-block;
+width:38px;
+height:20px;
+}
+
+.switch input{
+opacity:0;
+width:0;
+height:0;
+}
+
+.slider{
+position:absolute;
+cursor:pointer;
+top:0;
+left:0;
+right:0;
+bottom:0;
+background:#ccc;
+transition:.3s;
+border-radius:20px;
+}
+
+.slider:before{
+position:absolute;
+content:"";
+height:14px;
+width:14px;
+left:3px;
+bottom:3px;
+background:white;
+transition:.3s;
+border-radius:50%;
+}
+
+input:checked + .slider{
+background:#2c7be5;
+}
+
+input:checked + .slider:before{
+transform:translateX(18px);
+}
+
+.year-item.disabled{
+opacity:0.5;
+pointer-events:none;
+}
     
 </style>
 </head>
@@ -216,6 +294,18 @@ searchInput.addEventListener("input", function(){
 
                 await loadLayer(key);
 
+                const layer = layerStore[key].layer;
+
+if(layer){
+    const bounds = layer.getBounds();
+    if(bounds && bounds.isValid()){
+        map.fitBounds(bounds, {
+            padding:[50,50],
+            maxZoom:16
+        });
+    }
+}
+
                 // aktifkan toggle tahun otomatis
                 document.querySelectorAll(".toggle").forEach(t=>{
                     if(!t.classList.contains("active")){
@@ -252,8 +342,17 @@ const arrow=document.createElement("span");
 arrow.className="arrow";
 arrow.innerHTML="▶";
 
-const catToggle=document.createElement("div");
-catToggle.className="toggle";
+const catToggle = document.createElement("label");
+catToggle.className = "switch";
+
+const catInput = document.createElement("input");
+catInput.type = "checkbox";
+
+const catSlider = document.createElement("span");
+catSlider.className = "slider";
+
+catToggle.appendChild(catInput);
+catToggle.appendChild(catSlider);
 
 const label=document.createElement("span");
 label.innerText=cat.name;
@@ -292,8 +391,17 @@ if(year.type!=="dir") continue;
 const yRow=document.createElement("div");
 yRow.className="row";
 
-const yToggle=document.createElement("div");
-yToggle.className="toggle";
+const yToggle = document.createElement("label");
+yToggle.className = "switch";
+
+const yInput = document.createElement("input");
+yInput.type = "checkbox";
+
+const ySlider = document.createElement("span");
+ySlider.className = "slider";
+
+yToggle.appendChild(yInput);
+yToggle.appendChild(ySlider);
 
 const yLabel=document.createElement("span");
 yLabel.innerText=year.name;
@@ -384,6 +492,16 @@ marker.on("mouseout", function () {
     }, 200);
 });
 
+marker.on("click", function(){
+    const bounds = layer.getBounds();
+    if(bounds && bounds.isValid()){
+        map.fitBounds(bounds, {
+            padding:[50,50],
+            maxZoom: 16
+        });
+    }
+});
+
 marker.on("popupopen", function () {
     const popupEl = marker.getPopup().getElement();
 
@@ -408,14 +526,13 @@ marker.on("popupopen", function () {
 
     layerStore[key].marker = marker;
 
-    map.fitBounds(bounds);
 }
   
 async function loadLayer(key){
 if(layerStore[key].layer){
 map.addLayer(layerStore[key].layer);
 if(layerStore[key].marker) map.addLayer(layerStore[key].marker);
-map.fitBounds(layerStore[key].layer.getBounds());
+
 return;
 }
 
@@ -527,15 +644,39 @@ row.append(toggle,label);
 uploadList.appendChild(row);
 
 toggle.onclick=()=>{
-toggle.classList.toggle("active");
-if(toggle.classList.contains("active")){
-layer.addTo(map);
-map.fitBounds(layer.getBounds());
-}else{
-map.removeLayer(layer);
-}
-};
+    toggle.classList.toggle("active");
 
+    if(toggle.classList.contains("active")){
+        layer.addTo(map);
+
+        if(layer instanceof L.GeoJSON){
+            const bounds = layer.getBounds();
+            if(bounds && bounds.isValid()){
+                map.fitBounds(bounds,{padding:[40,40],maxZoom:17});
+            }
+        }else{
+
+            if(layer._zoomBound){
+                const bounds = layer.getBounds();
+                if(bounds && bounds.isValid()){
+                    map.fitBounds(bounds,{padding:[40,40],maxZoom:17});
+                }
+            }else{
+                layer.once("ready",()=>{
+                    const bounds = layer.getBounds();
+                    if(bounds && bounds.isValid()){
+                        map.fitBounds(bounds,{padding:[40,40],maxZoom:17});
+                    }
+                    layer._zoomBound = true;
+                });
+            }
+
+        }
+
+    }else{
+        map.removeLayer(layer);
+    }
+};
 toggle.click();
 }
 });
