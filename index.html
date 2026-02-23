@@ -92,29 +92,48 @@ color:white;
 
 /* ================= RAPIIKAN BASEMAP CONTROL ================= */
 
-.leaflet-control-layers {
-    border-radius: 10px !important;
-    padding: 8px 12px !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
-    font-size: 14px;
+.basemap-control{
+background:#fff;
+padding:10px;
+border-radius:12px;
+box-shadow:0 4px 12px rgba(0,0,0,0.15);
+width:180px;
+font-family:Arial, sans-serif;
 }
 
-.leaflet-control-layers-base label {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 4px;
-    cursor: pointer;
+.basemap-option{
+display:flex;
+align-items:center;
+gap:8px;
+padding:6px 8px;
+border-radius:8px;
+cursor:pointer;
+transition:0.2s;
 }
 
-.leaflet-control-layers-base input[type="radio"] {
-    transform: scale(1.1);
-    margin: 0;
+.basemap-option:hover{
+background:#f2f4f8;
 }
 
-.leaflet-control-layers-base label:hover {
-    background: #f0f6ff;
-    border-radius: 6px;
+.basemap-option input{
+accent-color:#2c7be5;
+cursor:pointer;
+}
+
+.basemap-option span{
+font-size:14px;
+color:#333;
+}
+
+.basemap-control{
+position:absolute;
+top:15px;
+left:15px;
+z-index:1000;
+background:#fff;
+padding:10px;
+border-radius:12px;
+box-shadow:0 4px 12px rgba(0,0,0,0.15);
 }
 
 /* Toggle Switch Modern */
@@ -174,6 +193,17 @@ pointer-events:none;
 <body>
 
 <div id="map"></div>
+<div class="basemap-control">
+  <label class="basemap-option">
+    <input type="radio" name="basemap" value="osm" checked>
+    <span>One Street Map</span>
+  </label>
+
+  <label class="basemap-option">
+    <input type="radio" name="basemap" value="satellite">
+    <span>Satellite</span>
+  </label>
+</div>
 <button id="toggleBtn">☰</button>
 
 <div id="sidebar">
@@ -237,16 +267,23 @@ const satellite = L.layerGroup([
 
 // tampilkan default
 osm.addTo(map);
+document.querySelectorAll('input[name="basemap"]').forEach(radio=>{
+    radio.addEventListener("change", function(){
+
+        if(this.value === "osm"){
+            map.removeLayer(satellite);
+            osm.addTo(map);
+        }
+
+        if(this.value === "satellite"){
+            map.removeLayer(osm);
+            satellite.addTo(map);
+        }
+
+    });
+});
 
 // kontrol layer (pojok kiri atas)
-L.control.layers(
-    {
-        "One Street Map": osm,
-        "Satellite": satellite
-    },
-    null,
-    { position: 'topleft' }
-).addTo(map);
 
 toggleBtn.onclick=()=>{
 sidebar.classList.toggle("active");
