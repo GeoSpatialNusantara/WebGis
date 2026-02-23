@@ -301,17 +301,11 @@ function addCenterMarker(layer,key){
     `;
 
     marker.bindPopup(popupContent,{
-        closeButton:false,
-        offset:[0,-25]
-    });
-
-    marker.on("mouseover",function(){
-        this.openPopup();
-    });
-
-    marker.on("mouseout",function(){
-        this.closePopup();
-    });
+    closeButton: true,
+    autoClose: true,
+    closeOnClick: true,
+    offset:[0,-25]
+});
 
     layerStore[key].marker = marker;
 
