@@ -228,26 +228,52 @@ if(layerStore[key].marker) map.removeLayer(layerStore[key].marker);
 
 function addCenterMarker(layer,key){
 
-const bounds=layer.getBounds();
-if(!bounds || !bounds.isValid()) return;
+    const bounds = layer.getBounds();
+    if(!bounds || !bounds.isValid()) return;
 
-const center=bounds.getCenter();
+    const center = bounds.getCenter();
 
-const icon=L.icon({
-iconUrl:markerImage,
-iconSize:[30,30],
-iconAnchor:[15,30]
-});
+    const icon = L.icon({
+        iconUrl: markerImage,
+        iconSize: [30,30],
+        iconAnchor: [15,30]
+    });
 
-if(layerStore[key].marker){
-map.removeLayer(layerStore[key].marker);
-}
+    if(layerStore[key].marker){
+        map.removeLayer(layerStore[key].marker);
+    }
 
-const marker=L.marker(center,{icon}).addTo(map);
+    const fileName = key.split("/").pop();
+    const fileUrl = layerStore[key].url;
 
-layerStore[key].marker=marker;
+    const marker = L.marker(center,{icon}).addTo(map);
 
-map.fitBounds(bounds);
+    // isi popup dengan nama + link download
+    const popupContent = `
+        <div style="text-align:center;">
+            <b>${fileName}</b><br>
+            <a href="${fileUrl}" download style="color:#2c7be5;text-decoration:none;font-weight:bold;">
+                Download
+            </a>
+        </div>
+    `;
+
+    marker.bindPopup(popupContent,{
+        closeButton:false,
+        offset:[0,-25]
+    });
+
+    marker.on("mouseover",function(){
+        this.openPopup();
+    });
+
+    marker.on("mouseout",function(){
+        this.closePopup();
+    });
+
+    layerStore[key].marker = marker;
+
+    map.fitBounds(bounds);
 }
   
 async function loadLayer(key){
