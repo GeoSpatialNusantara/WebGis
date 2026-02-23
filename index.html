@@ -94,6 +94,7 @@ border-radius:6px;border:1px solid #ccc;
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/shpjs@latest/dist/shp.min.js"></script>
 <script src="https://unpkg.com/leaflet-omnivore@latest/leaflet-omnivore.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <script>
 const OWNER="GeoSpatialNusantara";
@@ -237,10 +238,28 @@ const res=await fetch(layerStore[key].url);
 const buffer=await res.arrayBuffer();
 const geo=await shp(buffer);
 layer=L.geoJSON(geo).addTo(map);
+
+}else if(layerStore[key].url.endsWith(".kmz")){
+const res=await fetch(layerStore[key].url);
+const buffer=await res.arrayBuffer();
+
+const zip=await JSZip.loadAsync(buffer);
+let kmlFile;
+
+zip.forEach((relativePath, zipEntry)=>{
+if(relativePath.endsWith(".kml")){
+kmlFile=zipEntry;
+}
+});
+
+if(kmlFile){
+const kmlText=await kmlFile.async("text");
+layer=omnivore.kml.parse(kmlText).addTo(map);
+}
+
 }else{
 layer=omnivore.kml(layerStore[key].url).addTo(map);
 }
-
 layer.on("ready",()=>{
 const bounds=layer.getBounds();
 const center=bounds.getCenter();
@@ -273,6 +292,22 @@ if(file.name.endsWith(".zip")){
 const buffer=await file.arrayBuffer();
 const geo=await shp(buffer);
 layer=L.geoJSON(geo);
+}else if(file.name.endsWith(".kmz")){
+const buffer=await file.arrayBuffer();
+const zip=await JSZip.loadAsync(buffer);
+
+let kmlFile;
+zip.forEach((relativePath, zipEntry)=>{
+if(relativePath.endsWith(".kml")){
+kmlFile=zipEntry;
+}
+});
+
+if(kmlFile){
+const kmlText=await kmlFile.async("text");
+layer=omnivore.kml.parse(kmlText);
+}
+
 }else{
 layer=omnivore.kml.parse(await file.text());
 }
