@@ -434,18 +434,17 @@ marker.on("popupopen", function () {
 
 async function fetchTXT(key){
 
-const txtPath = key.replace(/\.(zip|kml|kmz)$/i, ".txt");
+    const txtPath = key.replace(/\.(zip|kml|kmz)$/i, ".txt");
+    const url = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/${txtPath}`;
 
-const url = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/${txtPath}`;
-
-try{
-    const res = await fetch(url);
-    if(!res.ok) return null;
-    const text = await res.text();
-    return JSON.parse(text);
-}catch(e){
-    return null;
-}
+    try{
+        const res = await fetch(url);
+        if(!res.ok) return null;
+        const text = await res.text();
+        return text;   // ✅ JANGAN JSON.parse
+    }catch(e){
+        return null;
+    }
 }
     
 async function loadLayer(key){
@@ -472,13 +471,11 @@ if(layerStore[key].url.endsWith(".zip")){
 
             let html="<div style='font-size:13px'>";
 
-            if(txtData){
-                for(let p in txtData){
-                    html+=`<b>${p}</b>: ${txtData[p]}<br>`;
-                }
-            }else{
-                html+="Tidak ada atribut tambahan";
-            }
+           if(txtData){
+    html += txtData.replace(/\n/g,"<br>");
+}else{
+    html += "Tidak ada atribut tambahan";
+}
 
             html+=`<hr>
             <a href="${layerStore[key].url}" target="_blank"
@@ -539,7 +536,27 @@ else if(layerStore[key].url.endsWith(".kmz")){
                 Download
                 </a></div>`;
 
-                l.bindPopup(html);
+                l.bindPopup(html,{
+    closeButton:false,
+    autoClose:false,
+    closeOnClick:false
+});
+
+let isHover = false;
+
+l.on("mouseover", function(e){
+    isHover = true;
+    this.openPopup(e.latlng);
+});
+
+l.on("mouseout", function(){
+    isHover = false;
+    setTimeout(()=>{
+        if(!isHover){
+            l.closePopup();
+        }
+    },150);
+});
 
             });
 
@@ -581,7 +598,27 @@ else{
             Download
             </a></div>`;
 
-            l.bindPopup(html);
+            l.bindPopup(html,{
+    closeButton:false,
+    autoClose:false,
+    closeOnClick:false
+});
+
+let isHover = false;
+
+l.on("mouseover", function(e){
+    isHover = true;
+    this.openPopup(e.latlng);
+});
+
+l.on("mouseout", function(){
+    isHover = false;
+    setTimeout(()=>{
+        if(!isHover){
+            l.closePopup();
+        }
+    },150);
+});
 
         });
 
@@ -591,7 +628,7 @@ else{
 }
 
 layerStore[key].layer = layer;
-addCenterMarker(layer,key);
+
 }
   
 /* ================= UPLOAD ================= */
