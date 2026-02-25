@@ -451,56 +451,49 @@ try{
 async function loadLayer(key){
 
 if(layerStore[key].layer){
-map.addLayer(layerStore[key].layer);
-return;
+    map.addLayer(layerStore[key].layer);
+    return;
 }
 
 let layer;
 
+// ====== Ambil TXT dulu ======
+const txtData = await fetchTXT(key);
+
+// ================= ZIP (SHP) =================
 if(layerStore[key].url.endsWith(".zip")){
 
-const res=await fetch(layerStore[key].url);
-const buffer=await res.arrayBuffer();
-const geo=await shp(buffer);
+    const res = await fetch(layerStore[key].url);
+    const buffer = await res.arrayBuffer();
+    const geo = await shp(buffer);
 
-layer = L.geoJSON(geo,{
+    layer = L.geoJSON(geo,{
+        onEachFeature:function(feature,layerItem){
 
-onEachFeature:function(feature,layerItem){
+            let html="<div style='font-size:13px'>";
 
-let html="<div style='font-size:13px'>";
+            if(txtData){
+                for(let p in txtData){
+                    html+=`<b>${p}</b>: ${txtData[p]}<br>`;
+                }
+            }else{
+                html+="Tidak ada atribut tambahan";
+            }
 
-if(txtData){
+            html+=`<hr>
+            <a href="${layerStore[key].url}" target="_blank"
+            style="background:#2c7be5;color:white;padding:6px 10px;
+            text-decoration:none;border-radius:4px">
+            Download
+            </a></div>`;
 
-    if(Array.isArray(txtData)){
-        // jika banyak fitur → cocokkan pakai index
-        const data = txtData[feature.properties.id - 1] || txtData[0];
-
-        for(let p in data){
-            html+=`<b>${p}</b>: ${data[p]}<br>`;
+            layerItem.bindPopup(html);
         }
-
-    }else{
-        // jika hanya satu object
-        for(let p in txtData){
-            html+=`<b>${p}</b>: ${txtData[p]}<br>`;
-        }
-    }
-
-}else{
-    html+="Tidak ada atribut tambahan";
+    }).addTo(map);
 }
 
-html+="</div>";
 
-layerItem.bindPopup(html);
-}
-
-}).addTo(map);
-
-}
-
-/* ================= KML / KMZ ================= */
-
+// ================= KMZ =================
 else if(layerStore[key].url.endsWith(".kmz")){
 
     const res = await fetch(layerStore[key].url);
@@ -516,60 +509,90 @@ else if(layerStore[key].url.endsWith(".kmz")){
     });
 
     if(kmlFile){
+
         const kmlText = await kmlFile.async("text");
         layer = omnivore.kml.parse(kmlText);
+
+        layer.on("ready", function(){
+
+            layer.eachLayer(function(l){
+
+                if(l instanceof L.Marker){
+                    layer.removeLayer(l);
+                    return;
+                }
+
+                let html="<div style='font-size:13px'>";
+
+                if(txtData){
+                    for(let p in txtData){
+                        html+=`<b>${p}</b>: ${txtData[p]}<br>`;
+                    }
+                }else{
+                    html+="Tidak ada atribut tambahan";
+                }
+
+                html+=`<hr>
+                <a href="${layerStore[key].url}" target="_blank"
+                style="background:#2c7be5;color:white;padding:6px 10px;
+                text-decoration:none;border-radius:4px">
+                Download
+                </a></div>`;
+
+                l.bindPopup(html);
+
+            });
+
+        });
+
         layer.addTo(map);
     }
-
 }
 
+
+// ================= KML =================
 else{
 
     layer = omnivore.kml(layerStore[key].url);
 
-    layer.on("ready", async function(){
+    layer.on("ready", function(){
 
-    // ====== Ambil nama file tanpa ekstensi ======
-    const fileName = layerStore[key].url.split("/").pop().replace(".kmz","");
+        layer.eachLayer(function(l){
 
-    // ====== Buat URL txt ======
-    const txtUrl = layerStore[key].url.replace(".kmz",".txt");
+            if(l instanceof L.Marker){
+                layer.removeLayer(l);
+                return;
+            }
 
-    let txtContent = "";
+            let html="<div style='font-size:13px'>";
 
-    try{
-        const resTxt = await fetch(txtUrl);
-        txtContent = await resTxt.text();
-    }catch(e){
-        txtContent = "Atribut tidak ditemukan";
-    }
+            if(txtData){
+                for(let p in txtData){
+                    html+=`<b>${p}</b>: ${txtData[p]}<br>`;
+                }
+            }else{
+                html+="Tidak ada atribut tambahan";
+            }
 
-    layer.eachLayer(function(l){
+            html+=`<hr>
+            <a href="${layerStore[key].url}" target="_blank"
+            style="background:#2c7be5;color:white;padding:6px 10px;
+            text-decoration:none;border-radius:4px">
+            Download
+            </a></div>`;
 
-        if(l instanceof L.Marker){
-            layer.removeLayer(l);
-            return;
-        }
+            l.bindPopup(html);
 
-        let html = `
-        <div style="font-size:13px">
-        <b>${fileName}</b><hr>
-        ${txtContent}
-        <hr>
-        <a href="${layerStore[key].url}" target="_blank"
-        style="display:inline-block;padding:6px 10px;
-        background:#2c7be5;color:white;
-        text-decoration:none;border-radius:4px">
-        Download File
-        </a>
-        </div>
-        `;
-
-        l.bindPopup(html);
+        });
 
     });
 
-});
+    layer.addTo(map);
+}
+
+layerStore[key].layer = layer;
+addCenterMarker(layer,key);
+}
   
 /* ================= UPLOAD ================= */
 uploadInput.addEventListener("change",async e=>{
